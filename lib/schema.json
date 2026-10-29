@@ -1,0 +1,244 @@
+[
+  {
+    "id": "personal",
+    "title": "I. Personal Information",
+    "fields": [
+      {"k": "surname", "l": "Surname", "g": "Name"},
+      {"k": "first_name", "l": "First Name"},
+      {"k": "middle_name", "l": "Middle Name"},
+      {"k": "name_ext", "l": "Name Extension (Jr., Sr.)"},
+      {"k": "dob", "l": "Date of Birth", "t": "date", "g": "Birth and Personal Details"},
+      {"k": "pob", "l": "Place of Birth", "w": 2},
+      {"k": "sex", "l": "Sex at Birth", "t": "select", "o": ["Male", "Female"]},
+      {"k": "height", "l": "Height (m)"},
+      {"k": "weight", "l": "Weight (kg)"},
+      {"k": "blood_type", "l": "Blood Type"},
+      {"k": "civil_status", "l": "Civil Status", "t": "select", "o": ["Single", "Married", "Widowed", "Separated", "Other/s"]},
+      {"k": "civil_status_other", "l": "Other civil status, specify", "if": ["civil_status", "Other/s"]},
+      {"k": "umid", "l": "UMID ID No.", "g": "Government ID Numbers"},
+      {"k": "pagibig", "l": "PAG-IBIG ID No."},
+      {"k": "philhealth", "l": "PhilHealth No."},
+      {"k": "psn", "l": "PhilSys Card Number (PCN)"},
+      {"k": "tin", "l": "TIN No."},
+      {"k": "agency_no", "l": "Agency Employee No."},
+      {"k": "citizenship", "l": "Citizenship", "t": "select", "o": ["Filipino", "Dual Citizenship"], "g": "Citizenship"},
+      {"k": "dual_type", "l": "Dual citizenship by", "t": "select", "o": ["By Birth", "By Naturalization"], "if": ["citizenship", "Dual Citizenship"]},
+      {"k": "dual_country", "l": "Country", "if": ["citizenship", "Dual Citizenship"], "w": 2},
+      {"k": "res_house", "l": "House/Block/Lot No.", "g": "Residential Address"},
+      {"k": "res_street", "l": "Street"},
+      {"k": "res_subd", "l": "Subdivision/Village"},
+      {"k": "res_brgy", "l": "Barangay"},
+      {"k": "res_city", "l": "City/Municipality"},
+      {"k": "res_prov", "l": "Province"},
+      {"k": "res_zip", "l": "ZIP Code"},
+      {"k": "perm_same", "l": "Same as Residential address", "t": "check", "w": 4, "g": "Permanent Address"},
+      {"k": "perm_house", "l": "House/Block/Lot No.", "if": ["perm_same", ""]},
+      {"k": "perm_street", "l": "Street", "if": ["perm_same", ""]},
+      {"k": "perm_subd", "l": "Subdivision/Village", "if": ["perm_same", ""]},
+      {"k": "perm_brgy", "l": "Barangay", "if": ["perm_same", ""]},
+      {"k": "perm_city", "l": "City/Municipality", "if": ["perm_same", ""]},
+      {"k": "perm_prov", "l": "Province", "if": ["perm_same", ""]},
+      {"k": "perm_zip", "l": "ZIP Code", "if": ["perm_same", ""]},
+      {"k": "telephone", "l": "Telephone No.", "g": "Contact"},
+      {"k": "mobile", "l": "Mobile No."},
+      {"k": "email", "l": "E-mail Address", "w": 2}
+    ]
+  },
+  {
+    "id": "family",
+    "title": "II. Family Background",
+    "fields": [
+      {"k": "sp_surname", "l": "Surname", "g": "Spouse"},
+      {"k": "sp_first", "l": "First Name"},
+      {"k": "sp_middle", "l": "Middle Name"},
+      {"k": "sp_ext", "l": "Name Extension"},
+      {"k": "sp_occupation", "l": "Occupation"},
+      {"k": "sp_employer", "l": "Employer/Business Name"},
+      {"k": "sp_biz_address", "l": "Business Address"},
+      {"k": "sp_tel", "l": "Telephone No."},
+      {"k": "fa_surname", "l": "Surname", "g": "Father"},
+      {"k": "fa_first", "l": "First Name"},
+      {"k": "fa_middle", "l": "Middle Name"},
+      {"k": "fa_ext", "l": "Name Extension"},
+      {"k": "mo_surname", "l": "Surname", "g": "Mother's Maiden Name"},
+      {"k": "mo_first", "l": "First Name"},
+      {"k": "mo_middle", "l": "Middle Name"}
+    ],
+    "tables": [
+      {
+        "k": "children", "l": "Children", "max": 12,
+        "c": [
+          {"k": "name", "l": "Full Name", "w": 3},
+          {"k": "dob", "l": "Date of Birth", "t": "date"}
+        ]
+      }
+    ]
+  },
+  {
+    "id": "education",
+    "title": "III. Educational Background",
+    "tables": [
+      {
+        "k": "education", "l": "Schools Attended (one row per level)", "max": 5,
+        "c": [
+          {"k": "level", "l": "Level", "t": "select", "o": ["Elementary", "Secondary", "Vocational/Trade Course", "College", "Graduate Studies"]},
+          {"k": "school", "l": "Name of School", "w": 2},
+          {"k": "course", "l": "Basic Education/Degree/Course", "w": 2},
+          {"k": "from", "l": "From (Year)"},
+          {"k": "to", "l": "To (Year)"},
+          {"k": "units", "l": "Highest Level/Units Earned"},
+          {"k": "year_grad", "l": "Year Graduated"},
+          {"k": "honors", "l": "Scholarship/Honors"}
+        ]
+      }
+    ]
+  },
+  {
+    "id": "eligibility",
+    "title": "IV. Civil Service Eligibility",
+    "tables": [
+      {
+        "k": "eligibility", "l": "Eligibilities", "max": 7,
+        "c": [
+          {"k": "name", "l": "Career Service/RA 1080/Board/Bar", "w": 2},
+          {"k": "rating", "l": "Rating"},
+          {"k": "date", "l": "Date of Exam/Conferment", "t": "date"},
+          {"k": "place", "l": "Place of Exam/Conferment", "w": 2},
+          {"k": "license_no", "l": "License No."},
+          {"k": "valid_until", "l": "License Valid Until", "t": "date"}
+        ]
+      }
+    ]
+  },
+  {
+    "id": "work",
+    "title": "V. Work Experience",
+    "tables": [
+      {
+        "k": "work", "l": "Positions (most recent first)", "max": 24,
+        "c": [
+          {"k": "from", "l": "From", "t": "date"},
+          {"k": "to", "l": "To (or PRESENT)"},
+          {"k": "position", "l": "Position Title", "w": 2},
+          {"k": "office", "l": "Department/Agency/Office/Company", "w": 2},
+          {"k": "salary", "l": "Monthly Salary", "t": "money"},
+          {"k": "sg", "l": "Salary Grade/Step"},
+          {"k": "status", "l": "Status of Appointment"},
+          {"k": "govt", "l": "Gov't Service", "t": "select", "o": ["Y", "N"]}
+        ]
+      }
+    ]
+  },
+  {
+    "id": "learning",
+    "title": "VI. Learning and Development",
+    "tables": [
+      {
+        "k": "learning", "l": "Trainings Attended", "max": 17,
+        "c": [
+          {"k": "title", "l": "Title of L&D Intervention", "w": 3},
+          {"k": "from", "l": "From", "t": "date"},
+          {"k": "to", "l": "To", "t": "date"},
+          {"k": "hours", "l": "No. of Hours"},
+          {"k": "type", "l": "Type of LD", "t": "select", "o": ["Managerial", "Supervisory", "Technical", "Foundation", "Other"]},
+          {"k": "sponsor", "l": "Conducted/Sponsored By", "w": 2}
+        ]
+      }
+    ]
+  },
+  {
+    "id": "voluntary",
+    "title": "VII. Voluntary Work",
+    "tables": [
+      {
+        "k": "voluntary", "l": "Civic/Non-Government/People/Voluntary Organizations", "max": 9,
+        "c": [
+          {"k": "org", "l": "Name and Address of Organization", "w": 3},
+          {"k": "from", "l": "From", "t": "date"},
+          {"k": "to", "l": "To", "t": "date"},
+          {"k": "hours", "l": "No. of Hours"},
+          {"k": "position", "l": "Position/Nature of Work", "w": 2}
+        ]
+      }
+    ]
+  },
+  {
+    "id": "other",
+    "title": "VIII. Other Information",
+    "tables": [
+      {
+        "k": "skills", "l": "Special Skills and Hobbies", "max": 7,
+        "c": [
+          {"k": "v", "l": "Skill/Hobby", "w": 4}
+        ]
+      },
+      {
+        "k": "recognitions", "l": "Non-Academic Distinctions/Recognition", "max": 7,
+        "c": [
+          {"k": "v", "l": "Distinction", "w": 4}
+        ]
+      },
+      {
+        "k": "memberships", "l": "Membership in Association/Organization", "max": 7,
+        "c": [
+          {"k": "v", "l": "Organization", "w": 4}
+        ]
+      }
+    ]
+  },
+  {
+    "id": "questions",
+    "title": "Questions 34-40",
+    "fields": [
+      {"k": "q34a", "l": "a. within the third degree?", "t": "yn", "w": 4, "g": "Question 34", "gd": "Are you related by consanguinity or affinity to the appointing or recommending authority, or to the chief of bureau or office, or to the person who has immediate supervision over you in the office, bureau or department where you will be appointed:"},
+      {"k": "q34a_details", "l": "If YES, give details", "w": 4, "if": ["q34a", "Yes"]},
+      {"k": "q34b", "l": "b. within the fourth degree (for Local Government Unit - Career Employees)?", "t": "yn", "w": 4},
+      {"k": "q34b_details", "l": "If YES, give details", "w": 4, "if": ["q34b", "Yes"]},
+      {"k": "q35a", "l": "a. Have you ever been found guilty of any administrative offense?", "t": "yn", "w": 4, "g": "Question 35"},
+      {"k": "q35a_details", "l": "If YES, give details", "w": 4, "if": ["q35a", "Yes"]},
+      {"k": "q35b", "l": "b. Have you been criminally charged before any court?", "t": "yn", "w": 4},
+      {"k": "q35b_details", "l": "If YES, give details", "w": 4, "if": ["q35b", "Yes"]},
+      {"k": "q35b_date", "l": "Date filed", "t": "date", "w": 2, "if": ["q35b", "Yes"]},
+      {"k": "q35b_status", "l": "Status of case/s", "w": 2, "if": ["q35b", "Yes"]},
+      {"k": "q36", "l": "Have you ever been convicted of any crime or violation of any law, decree, ordinance or regulation by any court or tribunal?", "t": "yn", "w": 4, "g": "Question 36"},
+      {"k": "q36_details", "l": "If YES, give details", "w": 4, "if": ["q36", "Yes"]},
+      {"k": "q37", "l": "Have you ever been separated from the service in any of the following modes: resignation, retirement, dropped from the rolls, dismissal, termination, end of term, finished contract or phased out (abolition) in the public or private sector?", "t": "yn", "w": 4, "g": "Question 37"},
+      {"k": "q37_details", "l": "If YES, give details", "w": 4, "if": ["q37", "Yes"]},
+      {"k": "q38a", "l": "a. Have you ever been a candidate in a national or local election held within the last year (except Barangay election)?", "t": "yn", "w": 4, "g": "Question 38"},
+      {"k": "q38a_details", "l": "If YES, give details", "w": 4, "if": ["q38a", "Yes"]},
+      {"k": "q38b", "l": "b. Have you resigned from the government service during the three (3)-month period before the last election to promote/actively campaign for a national or local candidate?", "t": "yn", "w": 4},
+      {"k": "q38b_details", "l": "If YES, give details", "w": 4, "if": ["q38b", "Yes"]},
+      {"k": "q39", "l": "Have you acquired the status of an immigrant or permanent resident of another country?", "t": "yn", "w": 4, "g": "Question 39"},
+      {"k": "q39_details", "l": "If YES, give details (country)", "w": 4, "if": ["q39", "Yes"]},
+      {"k": "q40a", "l": "a. Are you a member of any indigenous group?", "t": "yn", "w": 4, "g": "Question 40", "gd": "Pursuant to: (a) Indigenous People's Act (RA 8371); (b) Magna Carta for Disabled Persons (RA 7277, as amended); and (c) Expanded Solo Parents Welfare Act (RA 11861), please answer the following items:"},
+      {"k": "q40a_details", "l": "If YES, please specify", "w": 4, "if": ["q40a", "Yes"]},
+      {"k": "q40b", "l": "b. Are you a person with disability?", "t": "yn", "w": 4},
+      {"k": "q40b_details", "l": "If YES, please specify ID No.", "w": 4, "if": ["q40b", "Yes"]},
+      {"k": "q40c", "l": "c. Are you a solo parent?", "t": "yn", "w": 4},
+      {"k": "q40c_details", "l": "If YES, please specify ID No.", "w": 4, "if": ["q40c", "Yes"]}
+    ]
+  },
+  {
+    "id": "references",
+    "title": "References and ID",
+    "fields": [
+      {"k": "gov_id", "l": "ID type (e.g. Passport, GSIS, SSS, PRC, Driver's License)", "g": "Government Issued ID", "w": 2},
+      {"k": "gov_id_no", "l": "ID/License/Passport No."},
+      {"k": "gov_id_issued", "l": "Date/Place of Issuance"},
+      {"k": "date_accomplished", "l": "Date Accomplished", "t": "date", "g": "Signature, Photo and Thumbmark"},
+      {"k": "signature", "l": "E-Signature (shown in every Signature box)", "t": "image", "clean": true, "w": 4},
+      {"k": "photo", "l": "Passport-sized photo (3.5 cm x 4.5 cm, taken within 6 months)", "t": "image", "aspect": 0.7778, "w": 2},
+      {"k": "thumbmark", "l": "Right Thumbmark", "t": "image", "clean": true, "w": 2}
+    ],
+    "tables": [
+      {
+        "k": "references", "l": "References (max 3, not relatives)", "max": 3,
+        "c": [
+          {"k": "name", "l": "Name", "w": 2},
+          {"k": "address", "l": "Address", "w": 2},
+          {"k": "tel", "l": "Tel. No."}
+        ]
+      }
+    ]
+  }
+]

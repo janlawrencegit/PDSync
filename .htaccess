@@ -1,0 +1,2 @@
+# Only public/ is meant to be web-facing; block everything else if the whole project lands in a web folder.
+Require all denied
