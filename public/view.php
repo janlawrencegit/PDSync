@@ -58,7 +58,7 @@ ksort($pages);
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex">
 <title>PDS - <?= h($name ?: 'Untitled') ?></title>
-<link rel="stylesheet" href="style.css?v=<?= filemtime(__DIR__ . '/style.css') ?>">
+<link rel="stylesheet" href="preview.css?v=<?= filemtime(__DIR__ . '/preview.css') ?>">
 </head>
 <body class="official<?= isset($_GET['embed']) ? ' embed' : '' ?>" style="--ar:<?= round($layout['aspect'], 5) ?>">
 <div class="noprint bar"><button onclick="print()" class="primary">Print / Save as PDF</button></div>

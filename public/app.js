@@ -134,9 +134,9 @@ function input(def, value, onChange) {
   let n;
   if (t === 'date') {
     const isIso = (v) => /^\d{4}-\d{2}-\d{2}$/.test(v || '');
-    const text = el('input', { type: 'text', placeholder: 'dd/mm/yyyy', value: toDmy(value) });
-    const pick = el('input', { type: 'date', className: 'pick', tabIndex: -1, value: isIso(value) ? value : '' });
-    const btn = el('button', { type: 'button', className: 'cal', title: 'Pick a date', onclick: (e) => {
+    const text = el('input', { type: 'text', className: 'input join-item w-full', placeholder: 'dd/mm/yyyy', value: toDmy(value) });
+    const pick = el('input', { type: 'date', className: 'absolute bottom-0 right-0 size-px opacity-0 pointer-events-none', tabIndex: -1, value: isIso(value) ? value : '' });
+    const btn = el('button', { type: 'button', className: 'btn join-item px-3', title: 'Pick a date', onclick: (e) => {
       e.preventDefault();
       pick.showPicker ? pick.showPicker() : pick.click();
     } });
@@ -151,14 +151,14 @@ function input(def, value, onChange) {
       text.value = toDmy(pick.value);
       onChange(pick.value);
     });
-    return el('span', { className: 'date' }, text, btn, pick);
+    return el('span', { className: 'join relative w-full' }, text, btn, pick);
   }
   if (t === 'image') {
     const img = el('img', { alt: def.l, hidden: !value });
     if (value) img.src = value;
     const file = el('input', { type: 'file', accept: 'image/png,image/jpeg', hidden: true });
-    const rm = el('button', { type: 'button', textContent: 'Remove', className: 'rm-sig', hidden: !value });
-    const up = el('button', { type: 'button', textContent: value ? 'Change' : 'Upload (PNG/JPG)' });
+    const rm = el('button', { type: 'button', textContent: 'Remove', className: 'btn btn-ghost btn-sm text-error', hidden: !value });
+    const up = el('button', { type: 'button', className: 'btn btn-sm', textContent: value ? 'Change' : 'Upload (PNG/JPG)' });
     const set = (v) => {
       img.src = v;
       img.hidden = rm.hidden = !v;
@@ -177,32 +177,33 @@ function input(def, value, onChange) {
       }
       file.value = '';
     };
-    const box = el('div', { className: 'sig-box' }, img);
+    const box = el('div', { className: 'img-box' }, img);
     if (def.aspect) Object.assign(box.style, { width: '110px', height: `${Math.round(110 / def.aspect)}px` });
-    return el('div', { className: 'sig' }, box, up, rm, file,
-      el('small', { className: 'muted' }, def.clean
+    return el('div', { className: 'img-field' }, box, up, rm, file,
+      el('small', {}, def.clean
         ? 'Crop after choosing the file. White background is removed automatically.'
         : 'Crop after choosing the file. The crop box is fixed at 3.5 cm x 4.5 cm (passport size).'));
   }
   if (t === 'money') {
-    n = el('input', { type: 'text', placeholder: '₱0.00', inputMode: 'decimal', value: toPeso(value) });
+    n = el('input', { type: 'text', className: 'input w-full', placeholder: '₱0.00', inputMode: 'decimal', value: toPeso(value) });
     n.addEventListener('input', () => onChange(n.value));
     n.addEventListener('blur', () => onChange((n.value = toPeso(n.value))));
     return n;
   }
   if (t === 'yn') {
     const name = `yn-${def.k}`;
-    return el('span', { className: 'yn' }, ...['Yes', 'No'].map((o) => {
-      const r = el('input', { type: 'radio', name, value: o, checked: value === o });
+    return el('span', { className: 'join' }, ...['Yes', 'No'].map((o) => {
+      const r = el('input', { type: 'radio', className: 'join-item btn btn-sm w-20 checked:btn-primary', name, value: o, checked: value === o });
+      r.setAttribute('aria-label', o);
       r.addEventListener('change', () => onChange(o));
-      return el('label', {}, r, el('span', {}, o));
+      return r;
     }));
   }
   if (t === 'select') {
-    n = el('select', {}, el('option', { value: '' }, 'Select...'));
+    n = el('select', { className: 'select w-full' }, el('option', { value: '' }, 'Select...'));
     def.o.forEach((o) => n.append(el('option', { value: o }, o)));
   } else {
-    n = el('input', { type: t });
+    n = el('input', { type: t, className: 'input w-full' });
   }
   n.value = value || '';
   n.addEventListener('input', () => onChange(n.value));
@@ -211,7 +212,7 @@ function input(def, value, onChange) {
 
 function field(def, value, onChange) {
   if (def.t === 'check') {
-    const n = el('input', { type: 'checkbox', checked: value === 'Yes' });
+    const n = el('input', { type: 'checkbox', className: 'checkbox checkbox-primary checkbox-sm', checked: value === 'Yes' });
     n.dataset.k = def.k;
     n.addEventListener('change', () => onChange(n.checked ? 'Yes' : ''));
     return el('label', { className: `f check w${def.w || 1}` }, n, el('span', {}, def.l));
@@ -225,34 +226,47 @@ function field(def, value, onChange) {
 
 function renderTable(t) {
   const rows = (state.tables[t.k] ||= []);
-  const box = el('section', { className: 'grp table' }, el('h3', {}, t.l, el('span', { className: 'count' }, `${rows.length}/${t.max || 50}`)));
+  const box = el('section', { className: 'grp' }, el('h3', {}, t.l, el('span', { className: 'count' }, `${rows.length} of ${t.max || 50}`)));
   rows.forEach((row, i) => {
-    const grid = el('div', { className: 'grid' });
+    const grid = el('div', { className: 'fields' });
     t.c.forEach((c) => grid.append(field(c, row[c.k], (v) => { row[c.k] = v; changed(); })));
-    const rm = el('button', { className: 'rm', textContent: 'Remove', onclick: () => { rows.splice(i, 1); changed(); render(); } });
-    box.append(el('div', { className: 'row' }, el('div', { className: 'row-h' }, el('strong', {}, `#${i + 1}`), rm), grid));
+    const rm = el('button', { className: 'btn btn-ghost btn-xs text-error', textContent: 'Remove', onclick: () => { rows.splice(i, 1); changed(); render(); } });
+    box.append(el('div', { className: 'entry' }, el('div', { className: 'entry-h' }, el('span', {}, `Entry ${i + 1}`), rm), grid));
   });
   if (rows.length < (t.max || 50)) {
-    box.append(el('button', { className: 'add', textContent: '+ Add entry', onclick: () => { rows.push({}); changed(); render(); } }));
+    box.append(el('button', { className: 'btn btn-block btn-outline btn-primary border-dashed', textContent: '+ Add entry', onclick: () => { rows.push({}); changed(); render(); } }));
   } else {
-    box.append(el('p', { className: 'muted small' }, 'This is the most the official form has room for.'));
+    box.append(el('p', { className: 'text-xs text-base-content/60' }, 'This is the most the official form has room for.'));
   }
   return box;
 }
 
-// Short tab labels so all categories fit without scrolling.
-const TAB = { personal: 'I. Personal', family: 'II. Family', education: 'III. Education', eligibility: 'IV. Eligibility', work: 'V. Work', learning: 'VI. L&D', voluntary: 'VII. Voluntary', other: 'VIII. Other Info', questions: '34-40 Questions', references: '41-42 References & ID' };
+// Short section labels for the stepper.
+const TAB = { personal: 'Personal Info', family: 'Family', education: 'Education', eligibility: 'Eligibility', work: 'Work Experience', learning: 'L&D', voluntary: 'Voluntary Work', other: 'Other Info', questions: 'Questions 34-40', references: 'References & ID' };
+
+// A section counts as started once any of its fields or table rows has a value.
+const started = (sec) => (sec.fields || []).some((f) => f.t !== 'check' && state.fields[f.k])
+  || (sec.tables || []).some((t) => (state.tables[t.k] || []).some((r) => Object.values(r).some(Boolean)));
+
+function renderSteps() {
+  $('#tabs').replaceChildren(...S.map((s, i) => el('button', {
+    className: `step${i === step ? ' on' : ''}${started(s) ? ' done' : ''}`, title: s.title, onclick: () => go(i),
+  }, el('span', { className: 'num' }, started(s) && i !== step ? '\u2713' : String(i + 1)), el('span', {}, TAB[s.id] || s.title))));
+  const n = S.filter(started).length;
+  $('#progress').max = S.length;
+  $('#progress').value = n;
+  $('#progress-text').textContent = `${n} of ${S.length} sections started`;
+}
 
 function render() {
   const sec = S[step];
-  $('#tabs').replaceChildren(...S.map((s, i) =>
-    el('button', { className: i === step ? 'on' : '', textContent: TAB[s.id] || s.title, title: s.title, onclick: () => go(i) })));
+  renderSteps();
   // A field with "g" starts a titled group; fields without one join the current group.
   const body = [];
   let grid;
   (sec.fields || []).forEach((f) => {
     if (f.g || !grid) {
-      grid = el('div', { className: 'grid' });
+      grid = el('div', { className: 'fields' });
       body.push(f.g ? el('section', { className: 'grp' }, el('h3', {}, f.g), f.gd ? el('p', { className: 'gd' }, f.gd) : '', grid) : grid);
     }
     grid.append(field(f, state.fields[f.k], (v) => {
@@ -262,12 +276,13 @@ function render() {
       changed();
     }));
   });
-  $('#form').replaceChildren(el('h2', {}, sec.title), ...body, ...(sec.tables || []).map(renderTable));
+  $('#form').replaceChildren(el('p', { className: 'text-xs font-medium text-base-content/50' }, `Section ${step + 1} of ${S.length}`),
+    el('h2', { className: 'mb-2 text-2xl font-semibold' }, sec.title), ...body, ...(sec.tables || []).map(renderTable));
   syncConditions();
   syncPermanent();
   $('#inp-name').placeholder = autoName();
   $('#btn-prev').disabled = step === 0;
-  $('#btn-next').textContent = step === S.length - 1 ? 'Export' : 'Next';
+  $('#btn-next').textContent = step === S.length - 1 ? 'Export' : 'Next \u2192';
   refreshPreview();
 }
 
@@ -460,6 +475,7 @@ let timer;
 function changed() {
   clearTimeout(timer);
   $('#inp-name').placeholder = autoName();
+  renderSteps();
   $('#status').textContent = 'Unsaved changes...';
   timer = setTimeout(() => {
     timer = null;
@@ -511,11 +527,11 @@ function showShare() {
   const view = `${base}view.php?id=${auth.id}`;
   const edit = `${base}#id=${auth.id}&key=${auth.key}`;
   const link = (label, url, note) => el('div', {}, el('b', {}, label), ' ',
-    el('input', { value: url, readOnly: true, onclick: (e) => e.target.select() }), ' ', el('span', { className: 'muted' }, note));
+    el('input', { className: 'input input-sm w-full max-w-md', value: url, readOnly: true, onclick: (e) => e.target.select() }), ' ', el('span', { className: 'text-xs opacity-70' }, note));
   $('#share').replaceChildren(
     link('View link:', view, 'read-only, safe to share'),
     auth.key ? link('Edit link:', edit, 'keep private, anyone with it can edit')
-      : el('div', { className: 'muted' }, 'To edit on another device, sign in there with the same Google account.'));
+      : el('div', { className: 'text-xs opacity-70' }, 'To edit on another device, sign in there with the same Google account.'));
   $('#share').hidden = false;
 }
 
@@ -618,11 +634,11 @@ const docLabel = (d) => d.name || (d.person || '').trim() || 'Untitled PDS';
 
 async function showDocs() {
   const { docs } = await (await fetch('account.php')).json();
-  const act = (label, fn, cls = '') => el('button', { className: cls, onclick: () => fn().catch((e) => alert(e.message)) }, label);
+  const act = (label, fn, cls = '') => el('button', { className: `btn btn-sm ${cls}`, onclick: () => fn().catch((e) => alert(e.message)) }, label);
   $('#docs-list').replaceChildren(...docs.map((d) => el('li', { className: d.id === auth.id ? 'on' : '' },
-    el('div', {}, el('strong', {}, docLabel(d)), el('span', { className: 'muted small' },
+    el('div', {}, el('strong', {}, docLabel(d)), el('span', { className: 'text-xs text-base-content/60' },
       `${d.id === auth.id ? 'Open now - ' : ''}${d.form} - updated ${new Date(d.updated.replace(' ', 'T')).toLocaleString()}`)),
-    el('div', { className: 'docs-acts' },
+    el('div', { className: 'flex flex-wrap gap-1.5' },
       act('Open', async () => openPds(d.id)),
       act('Rename', async () => {
         const name = prompt('New name', docLabel(d));
@@ -637,8 +653,8 @@ async function showDocs() {
         await account('delete', { id: d.id });
         if (d.id === auth.id) return newPds();
         showDocs();
-      }, 'rm-sig')))));
-  if (!docs.length) $('#docs-list').append(el('li', { className: 'muted' }, 'No saved PDS yet. Your current PDS is saved here automatically.'));
+      }, 'btn-ghost text-error')))));
+  if (!docs.length) $('#docs-list').append(el('li', { className: 'text-sm text-base-content/60' }, 'No saved PDS yet. Your current PDS is saved here automatically.'));
   if (!$('#dlg-docs').open) $('#dlg-docs').showModal();
 }
 
@@ -647,8 +663,9 @@ let copyFrom;
 function openCopy(d) {
   copyFrom = d;
   $('#copy-name').value = `${docLabel(d)} (copy)`;
-  $('#copy-secs').replaceChildren(el('legend', {}, 'Sections to copy'),
-    ...S.map((sec) => el('label', {}, el('input', { type: 'checkbox', value: sec.id, checked: sec.id !== 'questions' }), ` ${sec.title}`)));
+  $('#copy-secs').replaceChildren(el('legend', { className: 'px-1 text-xs font-medium text-base-content/70' }, 'Sections to copy'),
+    ...S.map((sec) => el('label', { className: 'flex items-center gap-2' },
+      el('input', { type: 'checkbox', className: 'checkbox checkbox-primary checkbox-sm', value: sec.id, checked: sec.id !== 'questions' }), sec.title)));
   $('#dlg-copy').showModal();
 }
 

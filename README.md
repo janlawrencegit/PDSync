@@ -76,11 +76,23 @@ Security measures:
 - `serve.ps1` turns on the PHP extensions the app needs, so you don't need a `php.ini`.
 - For Google sign-in on your PC, add `http://localhost:8000/auth.php` as a redirect URI and put the client ID and secret in `config.local.php`.
 
+## Styling
+
+The UI uses Tailwind CSS v4.3.3 and daisyUI v5.7.50 through the standalone CLI, so it needs no npm. The built `public/app.css` is committed, so servers need no build step. After changing classes or `tools/css/app.css`, rebuild it:
+
+```powershell
+.	oolsuild-css.ps1          # add -Watch to rebuild on every change
+```
+
+- The script downloads the pinned CLI and plugin into `tools/bin/` (not committed) and verifies their SHA-256 hashes.
+- The official-form preview has its own `public/preview.css` and does not use Tailwind.
+
 ## Project layout
 
 | Path | Contents |
 |---|---|
-| `public/` | Web root: pages, API endpoints, `app.js`, `style.css`, and the form page images (`pds/`) |
+| `public/` | Web root: pages, API endpoints, `app.js`, built `app.css`, `preview.css` (official-form look) and the form page images (`pds/`) |
+| `tools/css/app.css` | Tailwind + daisyUI source for `public/app.css` |
 | `lib/` | Storage, sign-in, xlsx reader/writer, PDS cell map, `schema.json` (form fields) and the official template |
 | `sql/schema.sql` | Database tables |
 | `tools/` | Local setup, local server, the JSON-to-MySQL migration, and the layout builder for new form revisions |

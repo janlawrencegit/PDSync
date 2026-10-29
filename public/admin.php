@@ -44,48 +44,58 @@ if ($admin) {
 }
 ?>
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="pdsync">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex">
 <title>PDSync Admin</title>
-<link rel="stylesheet" href="style.css?v=<?= filemtime(__DIR__ . '/style.css') ?>">
+<link rel="stylesheet" href="app.css?v=<?= filemtime(__DIR__ . '/app.css') ?>">
 </head>
-<body>
-<header class="bar">
-  <strong>PDSync Admin</strong>
+<body class="min-h-screen bg-base-200 text-base-content antialiased">
+<header class="flex h-16 items-center gap-3 border-b border-base-300 bg-base-100 px-4">
+  <span class="grid size-9 place-items-center rounded-lg bg-primary text-sm font-bold text-primary-content">PDS</span>
+  <span class="font-semibold">PDSync Admin</span>
   <?php if ($admin): ?>
-  <form method="post" class="acct">
-    <span class="muted"><?= h($admin) ?></span>
+  <form method="post" class="ml-auto flex items-center gap-3">
+    <span class="text-sm text-base-content/60"><?= h($admin) ?></span>
     <input type="hidden" name="csrf" value="<?= h($_SESSION['csrf']) ?>">
-    <button name="logout" value="1">Sign out</button>
+    <button name="logout" value="1" class="btn btn-ghost btn-sm">Sign out</button>
   </form>
   <?php endif; ?>
 </header>
 <?php if (!$admin): ?>
-<form method="post" class="admin-login">
-  <h2>Admin sign-in</h2>
-  <?php if ($error): ?><p class="err"><?= h($error) ?></p><?php endif; ?>
+<form method="post" class="mx-auto mt-[12vh] grid w-[min(380px,92vw)] gap-4 rounded-box border border-base-300 bg-base-100 p-7">
+  <div>
+    <h1 class="text-xl font-semibold">Admin sign-in</h1>
+    <p class="text-sm text-base-content/60">For PDSync administrators only.</p>
+  </div>
+  <?php if ($error): ?><div role="alert" class="alert alert-error alert-soft text-sm"><?= h($error) ?></div><?php endif; ?>
   <input type="hidden" name="csrf" value="<?= h($_SESSION['csrf']) ?>">
-  <label class="f">Username<input name="user" autocomplete="username" required autofocus></label>
-  <label class="f">Password<input name="pass" type="password" autocomplete="current-password" required></label>
-  <button class="primary">Sign in</button>
+  <label class="f"><span>Username</span><input name="user" class="input w-full" autocomplete="username" required autofocus></label>
+  <label class="f"><span>Password</span><input name="pass" type="password" class="input w-full" autocomplete="current-password" required></label>
+  <button class="btn btn-primary">Sign in</button>
 </form>
 <?php else: ?>
-<main class="admin">
-  <h2>Overview</h2>
+<main class="mx-auto grid max-w-6xl gap-6 p-6">
+  <h1 class="text-2xl font-semibold">Overview</h1>
   <?php if ($stats === null): ?>
-  <p class="err">The database is not reachable. Check config.local.php.</p>
+  <div role="alert" class="alert alert-error alert-soft">The database is not reachable. Check config.local.php.</div>
   <?php else: ?>
-  <div class="stats">
-    <?php foreach ($stats as $label => $n): ?><div><b><?= $n ?></b><span><?= h($label) ?></span></div><?php endforeach; ?>
+  <div class="stats stats-vertical w-full border border-base-300 bg-base-100 md:stats-horizontal">
+    <?php foreach ($stats as $label => $n): ?>
+    <div class="stat"><div class="stat-title"><?= h($label) ?></div><div class="stat-value text-primary"><?= $n ?></div></div>
+    <?php endforeach; ?>
   </div>
-  <h3>PDS per form version</h3>
-  <table class="admin-table">
-    <tr><th>Form</th><th>PDS</th></tr>
-    <?php foreach ($forms as $f): ?><tr><td><?= h($f['form']) ?></td><td><?= (int)$f['n'] ?></td></tr><?php endforeach; ?>
-  </table>
+  <section class="rounded-box border border-base-300 bg-base-100 p-5">
+    <h2 class="mb-3 font-semibold">PDS per form version</h2>
+    <table class="table">
+      <thead><tr><th>Form</th><th class="text-right">PDS</th></tr></thead>
+      <tbody>
+      <?php foreach ($forms as $f): ?><tr><td><?= h($f['form']) ?></td><td class="text-right"><?= (int)$f['n'] ?></td></tr><?php endforeach; ?>
+      </tbody>
+    </table>
+  </section>
   <?php endif; ?>
 </main>
 <?php endif; ?>
