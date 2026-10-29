@@ -151,3 +151,15 @@ img.ov.pic-photo { object-fit: contain; padding: .3cqw; background: #fff content
   .pg { max-width: none; margin: 0; box-shadow: none; break-after: page; }
 }
 
+
+/* Admin */
+.admin-login { width: min(360px, 92vw); margin: 10vh auto; padding: 24px; background: #fff; border: 1px solid #e3e5e8; border-radius: 12px; display: grid; gap: 12px; }
+.admin-login h2 { margin: 0; }
+.err { margin: 0; padding: 8px 10px; border-radius: 6px; background: #fef3f2; color: #b42318; font-size: 13px; }
+.admin { margin: 16px; border-radius: 8px; }
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; }
+.stats div { display: grid; padding: 14px; border: 1px solid #e3e5e8; border-radius: 8px; }
+.stats b { font-size: 26px; }
+.stats span { font-size: 12px; color: #667085; }
+.admin-table { border-collapse: collapse; min-width: 280px; }
+.admin-table th, .admin-table td { text-align: left; padding: 6px 12px; border-bottom: 1px solid #e3e5e8; }

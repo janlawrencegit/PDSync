@@ -43,6 +43,28 @@ Fill out the CSC Personal Data Sheet (CS Form 212, Revised 2026) with a live pre
 
 If you leave Google settings empty, the app runs without the Sign in button.
 
+## Admin
+
+The admin page is `/admin.php`. Admin accounts are stored in `data/admins.json`, outside the web root and never committed. Manage them from a terminal:
+
+```sh
+php tools/admin-user.php add <username>     # asks for the password twice (min 12 characters), input hidden
+php tools/admin-user.php passwd <username>
+php tools/admin-user.php remove <username>
+php tools/admin-user.php list
+```
+
+Security measures:
+
+- Passwords are stored as bcrypt hashes.
+- 5 failed sign-ins from one IP lock sign-in for 15 minutes.
+- Sign-in uses a CSRF token and an Origin check.
+- The admin session is separate from users' sessions:
+  - Its cookie is HttpOnly and SameSite=Strict.
+  - Its ID changes at each sign-in.
+  - It expires after 30 minutes idle, or 8 hours after sign-in.
+- The response time is the same for unknown and real usernames.
+
 ## Run locally
 
 ```powershell
