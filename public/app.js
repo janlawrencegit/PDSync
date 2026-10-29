@@ -10,8 +10,8 @@ const el = (tag, attrs = {}, ...kids) => {
 };
 
 let state = { fields: {}, tables: {} };
-// An edit link (#id=..&key=..) or #open=id (signed in) opens that PDS; otherwise the last one opened on this PC.
-let link = Object.fromEntries(new URLSearchParams(location.hash.slice(1)));
+// After sign-in, #open=id names the PDS just moved into the account; otherwise the last one opened on this PC.
+const openId = new URLSearchParams(location.hash.slice(1)).get('open');
 let auth = {};
 let step = 0;
 
@@ -402,7 +402,7 @@ function refreshPreview() {
   previewTimer = setTimeout(async () => {
     const frame = $('#preview');
     const y = frame.contentWindow?.scrollY || 0;
-    const res = await fetch('view.php?embed=1', { method: 'POST', body: JSON.stringify(state) });
+    const res = await fetch('view.php', { method: 'POST', body: JSON.stringify(state) });
     frame.onload = () => {
       applyFit();
       if (jumpTo) showPage(jumpTo);
@@ -562,62 +562,39 @@ async function save() {
   const res = await fetch('api.php', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ ...(auth.id ? auth : link), data: state, name: $('#inp-name').value }),
+    // Signed-in users save by id (ownership); anonymous saves go to this browser's cookie PDS.
+    body: JSON.stringify({ ...(window.USER && auth.id ? { id: auth.id } : {}), data: state, name: $('#inp-name').value }),
   });
   const out = await res.json();
   if (!res.ok) throw new Error(out.error || 'Save failed');
-  auth = { id: out.id, key: out.key ?? auth.key };
+  auth = { id: out.id };
   if (window.USER) localStorage.setItem(CURRENT, out.id);
   localStorage.setItem(DRAFT, JSON.stringify({ state }));
-  if (!$('#share').hidden) showShare();
-}
-
-function showShare() {
-  const base = location.origin + location.pathname.replace(/[^/]*$/, '');
-  const view = `${base}view.php?id=${auth.id}`;
-  const edit = `${base}#id=${auth.id}&key=${auth.key}`;
-  const link = (label, url, note) => el('div', {}, el('b', {}, label), ' ',
-    el('input', { className: 'input input-sm w-full max-w-md', value: url, readOnly: true, onclick: (e) => e.target.select() }), ' ', el('span', { className: 'text-xs opacity-70' }, note));
-  $('#share').replaceChildren(
-    link('View link:', view, 'read-only, safe to share'),
-    auth.key ? link('Edit link:', edit, 'keep private, anyone with it can edit')
-      : el('div', { className: 'text-xs opacity-70' }, 'To edit on another device, sign in there with the same Google account.'));
-  $('#share').hidden = false;
 }
 
 async function load() {
   const draft = JSON.parse(localStorage.getItem(DRAFT) || 'null');
-  const byLink = (a) => fetch(`api.php?${new URLSearchParams(a.key ? { id: a.id, key: a.key } : { id: a.id })}`);
-  if (link.open) {
-    localStorage.setItem(CURRENT, link.open);
-    link = {};
+  const byId = (id) => fetch(`api.php?id=${encodeURIComponent(id)}`);
+  if (openId) {
+    localStorage.setItem(CURRENT, openId);
     history.replaceState(null, '', location.pathname);
   }
   const current = window.USER && localStorage.getItem(CURRENT);
   try {
-    let res = await (link.id ? byLink(link) : current ? byLink({ id: current }) : fetch('api.php'));
+    let res = await (current ? byId(current) : fetch('api.php'));
     if (!res.ok && current) res = await fetch('api.php');
     // On a new device, a signed-in user continues their most recent PDS.
-    if (!res.ok && window.USER && !link.id) {
+    if (!res.ok && window.USER) {
       const latest = (await (await fetch('account.php')).json()).docs[0];
-      if (latest) res = await byLink({ id: latest.id });
+      if (latest) res = await byId(latest.id);
     }
-    // Adopts a PDS saved before per-PC sessions existed.
-    if (!res.ok && !link.id && draft?.auth?.id) res = await byLink(draft.auth);
     if (res.ok) {
       const out = await res.json();
       state = out.data;
-      auth = { id: out.id, key: out.key };
+      auth = { id: out.id };
       $('#inp-name').value = out.name || localStorage.getItem('pds-name') || '';
-      if (window.USER && out.own) localStorage.setItem(CURRENT, out.id);
+      if (window.USER) localStorage.setItem(CURRENT, out.id);
       $('#status').textContent = 'Loaded your saved PDS';
-      // Once a link's PDS is this PC's own, hide the key from the address bar.
-      if (out.own && link.id) {
-        link = {};
-        history.replaceState(null, '', location.pathname);
-      }
-    } else if (link.id) {
-      $('#status').textContent = 'Saved PDS not found or link is invalid';
     } else if (draft?.state) {
       state = draft.state;
     }
@@ -632,15 +609,6 @@ $('#form').addEventListener('focusout', refreshPreview);
 $('#form').addEventListener('change', refreshPreview);
 $('#btn-prev').onclick = () => go(step - 1);
 $('#btn-next').onclick = () => (step === S.length - 1 ? openExport() : go(step + 1));
-$('#btn-save').onclick = async () => {
-  if (!$('#share').hidden) return ($('#share').hidden = true);
-  try {
-    if (!auth.id) await save();
-    showShare();
-  } catch (e) {
-    $('#status').textContent = e.message;
-  }
-};
 $('#inp-xlsx').onchange = async (e) => {
   const body = new FormData();
   body.append('file', e.target.files[0]);
@@ -655,15 +623,16 @@ $('#inp-xlsx').onchange = async (e) => {
   render();
   changed();
 };
-// Starts a blank PDS; the current one stays saved (in My PDS when signed in, else via its edit link).
+// Starts a blank PDS; when signed in the current one stays in My PDS, otherwise it is left unreachable.
 async function newPds() {
   await fetch('api.php', { method: 'DELETE' });
   [DRAFT, CURRENT, 'pds-name'].forEach((k) => localStorage.removeItem(k));
   location.href = location.pathname;
 }
 $('#btn-clear').onclick = () => {
-  const where = window.USER ? 'in My PDS' : 'and opens again with its edit link';
-  if (confirm(`Start a new blank PDS? The current one stays saved ${where}.`)) newPds();
+  const msg = window.USER ? 'Start a new blank PDS? The current one stays saved in My PDS.'
+    : 'Start a new blank PDS? Without signing in, the current one can no longer be opened on this PC.';
+  if (confirm(msg)) newPds();
 };
 
 // Opens another saved PDS from the account list.

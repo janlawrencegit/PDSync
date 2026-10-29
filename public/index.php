@@ -29,7 +29,6 @@ $v = fn($f) => filemtime(__DIR__ . "/$f");
   </label>
   <div class="ml-auto flex items-center gap-1">
     <label class="btn btn-ghost btn-sm">Import Excel<input id="inp-xlsx" type="file" accept=".xlsx" hidden></label>
-    <button id="btn-save" class="btn btn-ghost btn-sm">Share</button>
     <button id="btn-clear" class="btn btn-ghost btn-sm">New</button>
     <button id="btn-export-open" class="btn btn-primary btn-sm">Export</button>
   </div>
@@ -66,7 +65,6 @@ $v = fn($f) => filemtime(__DIR__ . "/$f");
   </nav>
 
   <section class="min-w-0">
-    <div id="share" class="alert alert-info alert-soft mb-4 grid gap-2 text-sm" hidden></div>
     <div class="rounded-box border border-base-300 bg-base-100">
       <main id="form" class="@container p-5 md:p-7"></main>
       <footer class="flex items-center gap-3 border-t border-base-300 px-5 py-3 md:px-7">

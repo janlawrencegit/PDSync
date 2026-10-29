@@ -2,18 +2,14 @@
 require __DIR__ . '/../lib/pds-xlsx.php';
 security_headers();
 
-// POST renders an unsaved draft for the live preview, GET renders a saved PDS.
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $body = json_decode(file_get_contents('php://input', false, null, 0, MAX_BYTES), true);
-    $d = pds_clean(is_array($body) ? $body : []);
-} else {
-    $rec = pds_read($_GET['id'] ?? '');
-    if (!$rec) {
-        http_response_code(404);
-        exit('PDS not found.');
-    }
-    $d = $rec['data'];
+// Renders the posted draft for the live preview only; saved PDS are never served by link.
+if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+    http_response_code(405);
+    exit('Not available.');
 }
+require_same_origin();
+$body = json_decode(file_get_contents('php://input', false, null, 0, MAX_BYTES), true);
+$d = pds_clean(is_array($body) ? $body : []);
 $name = trim(($d['fields']['first_name'] ?? '') . ' ' . ($d['fields']['surname'] ?? ''));
 $layout = json_decode(file_get_contents(__DIR__ . '/../lib/templates/pds-2026-layout.json'), true);
 $types = pds_key_types();
@@ -60,8 +56,7 @@ ksort($pages);
 <title>PDS - <?= h($name ?: 'Untitled') ?></title>
 <link rel="stylesheet" href="preview.css?v=<?= filemtime(__DIR__ . '/preview.css') ?>">
 </head>
-<body class="official<?= isset($_GET['embed']) ? ' embed' : '' ?>" style="--ar:<?= round($layout['aspect'], 5) ?>">
-<div class="noprint bar"><button onclick="print()" class="primary">Print / Save as PDF</button></div>
+<body class="official embed" style="--ar:<?= round($layout['aspect'], 5) ?>">
 <?php foreach ($pages as $n => $items): ?>
   <div class="pg" style="aspect-ratio:1/<?= round($layout['aspect'], 5) ?>">
     <img src="pds/page<?= $n ?>.png?v=<?= filemtime(__DIR__ . "/pds/page$n.png") ?>" alt="PDS page <?= $n ?>">

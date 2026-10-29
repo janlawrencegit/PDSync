@@ -2,7 +2,7 @@
 
 Fill out the CSC Personal Data Sheet (CS Form 212, Revised 2026) with a live preview of the official form, then export it as PDF or as the official Excel file.
 
-- **Without an account:** each PC/browser keeps its own PDS (HttpOnly cookie). Share links still work.
+- **Without an account:** each PC/browser keeps its own PDS (HttpOnly cookie). There are no share links: a PDS is reachable only from that browser, or from the owner's Google account.
 - **Signed in with Google (optional):**
   - Keep several PDS in **My PDS**: open, rename, delete, or **Copy to new**, which copies only the sections you choose.
   - Your PDS follows you to any device.
@@ -103,7 +103,8 @@ The UI uses Tailwind CSS v4.3.3 and daisyUI v5.7.50 through the standalone CLI, 
 - Only the Google ID, email and name are stored for an account; Google tokens are never kept.
 - Login uses the OAuth code flow with PKCE and `state`, and the ID token's issuer, audience, expiry and verified email are checked.
 - Anonymous PDS:
-  - They are reached only with this browser's cookie or an edit link. The server stores only a SHA-256 hash of the key.
+  - They are reached only with this browser's HttpOnly cookie. The key never reaches page scripts, and the server stores only its SHA-256 hash.
+- There are no public view or edit links. `view.php` only renders the posted draft for the live preview.
   - Signing in moves this browser's anonymous PDS into the account. The anonymous cookie then stops working for it.
   - Anonymous PDS not updated for 180 days are deleted.
 - Signing out clears the account's PDS from the browser's storage.
@@ -129,4 +130,4 @@ Fields whose keys are unchanged carry over automatically. Signed-in users can us
 
 - Export fills the official CSC template (`lib/templates/pds-2026.xlsx`, sheets C1-C4), including checkboxes, the country dropdown, the signature, the photo and the thumbmark.
 - **Import Excel** reads a filled official PDS back in.
-- The preview, view link and printout overlay your answers on images of the official pages. `tools/build-layout.ps1` regenerates those images and positions; it needs Excel on Windows.
+- The preview and printout overlay your answers on images of the official pages. `tools/build-layout.ps1` regenerates those images and positions; it needs Excel on Windows.

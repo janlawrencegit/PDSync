@@ -1,10 +1,7 @@
 /* Official-form preview (view.php, and the cloned pages in the print dialog): template page images with values overlaid. */
 .official *, .pg, .pg * { box-sizing: border-box; }
 .official { margin: 0; background: #e9ebee; padding: 0 16px 24px; font: 14px/1.4 system-ui, sans-serif; }
-.official .bar { display: flex; gap: 8px; padding: 10px 16px; margin: 0 -16px 16px; background: #fff; border-bottom: 1px solid #e3e5e8; }
-.official .bar button { font: inherit; padding: 6px 14px; border: 0; border-radius: 8px; background: #1d3f8f; color: #fff; cursor: pointer; }
 .official.embed { padding: 12px; }
-.official.embed .bar { display: none; }
 .official.embed .pg { margin-bottom: 12px; }
 .official.fit-page .pg { width: calc((100vh - 24px) / var(--ar)); }
 .pg { position: relative; container-type: inline-size; max-width: 900px; margin: 0 auto 16px; background: #fff; box-shadow: 0 1px 4px rgba(0,0,0,.2); }
@@ -23,7 +20,6 @@ img.ov.pic-photo { object-fit: contain; padding: .3cqw; background: #fff content
 .ov.sel { background: #fff; padding-left: .5cqw; }
 @media print {
   @page { size: A4; margin: 0; }
-  .noprint { display: none; }
   .official { background: #fff; padding: 0; }
   .pg { max-width: none; margin: 0; box-shadow: none; break-after: page; }
 }

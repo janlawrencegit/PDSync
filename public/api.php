@@ -1,5 +1,5 @@
 <?php
-// JSON endpoint for one PDS: by id with its edit key or owner sign-in, else this browser's anonymous session cookie.
+// JSON endpoint for one PDS: by id for its signed-in owner, else this browser's anonymous PDS (key only in an HttpOnly cookie).
 require __DIR__ . '/../lib/auth.php';
 
 security_headers();
@@ -38,20 +38,10 @@ if ($method === 'DELETE') {
 }
 
 if ($method === 'GET') {
-    if (isset($_GET['id'])) {
-        $rec = pds_read($_GET['id']);
-        $key = $_GET['key'] ?? null;
-        if (!pds_can($rec, $key, $uid)) reply(404, ['error' => 'Not found']);
-        // A link opened on a PC without its own anonymous PDS becomes that PC's PDS.
-        $own = $uid ? (int)$rec['user_id'] === $uid : !pds_cookie()[0];
-        if ($own && !$uid && $key) pds_cookie_set($rec['id'], $key);
-    } else {
-        $rec = cookie_rec($uid);
-        if (!$rec) reply(404, ['error' => 'Not found']);
-        $key = $rec['key'];
-        $own = true;
-    }
-    reply(200, ['id' => $rec['id'], 'key' => $key, 'own' => $own, 'name' => $rec['name'], 'data' => $rec['data']]);
+    $rec = isset($_GET['id']) ? pds_read($_GET['id']) : cookie_rec($uid);
+    if (isset($_GET['id']) && !pds_can($rec, null, $uid)) $rec = null;
+    if (!$rec) reply(404, ['error' => 'Not found']);
+    reply(200, ['id' => $rec['id'], 'name' => $rec['name'], 'data' => $rec['data']]);
 }
 
 if ($method !== 'POST') reply(405, ['error' => 'Method not allowed']);
@@ -64,17 +54,16 @@ $name = (string)($body['name'] ?? '');
 
 if (isset($body['id'])) {
     $rec = pds_read($body['id']);
-    if (!pds_can($rec, $body['key'] ?? null, $uid)) reply(403, ['error' => 'No access to this PDS']);
+    if (!pds_can($rec, null, $uid)) reply(403, ['error' => 'No access to this PDS']);
     pds_update($rec['id'], $body['data'], $name);
-    if ($uid && !$rec['user_id']) pds_claim($rec['id'], $uid);
     reply(200, ['id' => $rec['id']]);
 }
 
 $rec = cookie_rec($uid);
 if ($rec) {
     pds_update($rec['id'], $body['data'], $name);
-    reply(200, ['id' => $rec['id'], 'key' => $rec['key']]);
+    reply(200, ['id' => $rec['id']]);
 }
 $res = pds_create($body['data'], $name, $uid);
 if (!$uid) pds_cookie_set($res['id'], $res['key']);
-reply(200, $res);
+reply(200, ['id' => $res['id']]);
