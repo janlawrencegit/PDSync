@@ -140,7 +140,7 @@
           {"k": "from", "l": "From", "t": "date"},
           {"k": "to", "l": "To", "t": "date"},
           {"k": "hours", "l": "No. of Hours"},
-          {"k": "type", "l": "Type of LD", "s": ["Managerial", "Supervisory", "Technical", "Foundation"]},
+          {"k": "type", "l": "Type of LD", "s": ["Managerial", "Supervisory", "Technical"]},
           {"k": "sponsor", "l": "Conducted/Sponsored By", "w": 2}
         ]
       }

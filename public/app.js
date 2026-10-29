@@ -207,28 +207,57 @@ function input(def, value, onChange) {
   }
   n.value = value || '';
   n.addEventListener('input', () => onChange(n.value));
-  if (def.s) {
-    n.setAttribute('list', datalist(def.s));
-    n.placeholder = 'Type or choose';
-  }
-  if (!def.sw) return n;
+  if (!def.s) return n;
+  const box = combo(n, def.s);
+  if (!def.sw) return box;
   // Warns while a typed value is outside the list (e.g. a country missing from the official Excel list); hidden by CSS when empty.
   const warn = el('small', { className: 'warn' }, def.sw);
   const check = () => (warn.hidden = def.s.some((o) => o.toLowerCase() === n.value.trim().toLowerCase()));
   n.addEventListener('input', check);
   check();
-  return el('span', { className: 'flex flex-col gap-1.5' }, n, warn);
+  return el('span', { className: 'flex flex-col gap-1.5' }, box, warn);
 }
 
-// One <datalist> per suggestion list, shared by every input that uses it.
-const lists = new Map();
-function datalist(opts) {
-  if (!lists.has(opts)) {
-    const id = `dl-${lists.size}`;
-    document.body.append(el('datalist', { id }, ...opts.map((o) => el('option', { value: o }))));
-    lists.set(opts, id);
-  }
-  return lists.get(opts);
+// Pick-or-type box: the full list opens on focus or click, typing filters it, arrows/Enter/Escape work from the keyboard.
+function combo(n, opts) {
+  const menu = el('ul', { className: 'combo-menu', hidden: true });
+  let items = [], active = -1;
+  n.placeholder = 'Type or choose';
+  n.autocomplete = 'off';
+  const pick = (o) => {
+    n.value = o;
+    n.dispatchEvent(new Event('input', { bubbles: true }));
+    menu.hidden = true;
+  };
+  const mark = (i) => {
+    active = i;
+    [...menu.children].forEach((li, j) => li.classList.toggle('on', j === i));
+    menu.children[i]?.scrollIntoView({ block: 'nearest' });
+  };
+  const show = (filter) => {
+    const q = filter ? n.value.trim().toLowerCase() : '';
+    items = opts.filter((o) => o.toLowerCase().includes(q));
+    menu.replaceChildren(...items.map((o) => el('li', { className: o === n.value ? 'sel' : '', onmousedown: (e) => { e.preventDefault(); pick(o); } }, o)));
+    menu.hidden = !items.length;
+    mark(-1);
+  };
+  n.addEventListener('focus', () => show(false));
+  n.addEventListener('click', () => menu.hidden && show(false));
+  n.addEventListener('input', (e) => e.isTrusted && show(true));
+  n.addEventListener('blur', () => (menu.hidden = true));
+  n.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') menu.hidden = true;
+    else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      if (menu.hidden) show(false);
+      const step = e.key === 'ArrowDown' ? 1 : -1;
+      mark(Math.max(0, Math.min(items.length - 1, active + step)));
+    } else if (e.key === 'Enter' && !menu.hidden && active >= 0) {
+      e.preventDefault();
+      pick(items[active]);
+    }
+  });
+  return el('span', { className: 'combo' }, n, menu);
 }
 
 function field(def, value, onChange) {

@@ -55,6 +55,13 @@
   .f.check { @apply flex-row items-center gap-2.5 cursor-pointer select-none; }
   .f.check > span { @apply text-sm font-normal text-base-content; }
   .f.q > span:first-child { @apply text-sm font-normal text-base-content leading-snug; }
+  .combo { @apply relative block; }
+  .combo::after { content: ""; @apply pointer-events-none absolute right-3.5 top-1/2 size-1.5 -translate-y-3/4 rotate-45 border-b-[1.5px] border-r-[1.5px] border-base-content/60; }
+  .combo > input { @apply pr-9; }
+  .combo-menu { @apply absolute left-0 right-0 top-full z-20 mt-1 max-h-64 overflow-y-auto rounded-box border border-base-300 bg-base-100 p-1 shadow-lg; }
+  .combo-menu li { @apply cursor-pointer rounded-field px-3 py-1.5 text-sm hover:bg-base-200; }
+  .combo-menu li.on { @apply bg-base-200; }
+  .combo-menu li.sel { @apply font-semibold text-primary; }
   .warn { @apply rounded-field bg-warning/25 px-2.5 py-1.5 text-xs text-warning-content; }
   .f input:placeholder-shown + .warn { display: none; }
   .w2 { @apply col-span-2; }
