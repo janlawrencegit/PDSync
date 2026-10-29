@@ -115,6 +115,12 @@ function pds_from_form_date(string $v): string
     return $v;
 }
 
+// Trims ordinary and non-breaking spaces.
+function pds_trim(string $v): string
+{
+    return preg_replace('/^[\s\x{a0}]+|[\s\x{a0}]+$/u', '', $v);
+}
+
 function pds_ref(string $addr): array
 {
     return explode('!', $addr, 2);
@@ -134,9 +140,10 @@ function pds_export(array $d): string
         foreach ($opts as $opt => $a) xlsx_check($b, ...[...pds_ref($a), ($d['fields'][$k] ?? '') === $opt]);
     }
     [$sheet, $cell, $offset] = PDS_COUNTRY;
-    $country = strtolower($d['fields']['dual_country'] ?? '');
+    $country = strtolower(pds_trim($d['fields']['dual_country'] ?? ''));
     for ($i = 2; $country !== '' && $i < 300; $i++) {
-        if (strtolower(xlsx_get($b, $sheet, 'Q' . ($offset + $i))) === $country) {
+        // Some template entries end with a non-breaking space (e.g. Spain, Thailand), so compare trimmed.
+        if (strtolower(pds_trim(xlsx_get($b, $sheet, 'Q' . ($offset + $i)))) === $country) {
             xlsx_select($b, $sheet, $cell, $i);
             break;
         }
@@ -213,7 +220,7 @@ function pds_import(string $bin): array
     }
     [$sheet, $cell, $offset] = PDS_COUNTRY;
     $i = (int)xlsx_get($b, $sheet, $cell);
-    $d['fields']['dual_country'] = $i > 1 && $d['fields']['citizenship'] === 'Dual Citizenship' ? xlsx_get($b, $sheet, 'Q' . ($offset + $i)) : '';
+    $d['fields']['dual_country'] = $i > 1 && $d['fields']['citizenship'] === 'Dual Citizenship' ? pds_trim(xlsx_get($b, $sheet, 'Q' . ($offset + $i))) : '';
 
     foreach (PDS_TABLES as $t => [$sheet, $start, $cols]) {
         $d['tables'][$t] = [];

@@ -207,7 +207,28 @@ function input(def, value, onChange) {
   }
   n.value = value || '';
   n.addEventListener('input', () => onChange(n.value));
-  return n;
+  if (def.s) {
+    n.setAttribute('list', datalist(def.s));
+    n.placeholder = 'Type or choose';
+  }
+  if (!def.sw) return n;
+  // Warns while a typed value is outside the list (e.g. a country missing from the official Excel list); hidden by CSS when empty.
+  const warn = el('small', { className: 'warn' }, def.sw);
+  const check = () => (warn.hidden = def.s.some((o) => o.toLowerCase() === n.value.trim().toLowerCase()));
+  n.addEventListener('input', check);
+  check();
+  return el('span', { className: 'flex flex-col gap-1.5' }, n, warn);
+}
+
+// One <datalist> per suggestion list, shared by every input that uses it.
+const lists = new Map();
+function datalist(opts) {
+  if (!lists.has(opts)) {
+    const id = `dl-${lists.size}`;
+    document.body.append(el('datalist', { id }, ...opts.map((o) => el('option', { value: o }))));
+    lists.set(opts, id);
+  }
+  return lists.get(opts);
 }
 
 function field(def, value, onChange) {

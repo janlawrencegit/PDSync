@@ -6,13 +6,13 @@
       {"k": "surname", "l": "Surname", "g": "Name"},
       {"k": "first_name", "l": "First Name"},
       {"k": "middle_name", "l": "Middle Name"},
-      {"k": "name_ext", "l": "Name Extension (Jr., Sr.)"},
+      {"k": "name_ext", "l": "Name Extension (Jr., Sr.)", "s": ["JR.", "SR.", "II", "III", "IV", "V", "N/A"]},
       {"k": "dob", "l": "Date of Birth", "t": "date", "g": "Birth and Personal Details"},
       {"k": "pob", "l": "Place of Birth", "w": 2},
       {"k": "sex", "l": "Sex at Birth", "t": "select", "o": ["Male", "Female"]},
       {"k": "height", "l": "Height (m)"},
       {"k": "weight", "l": "Weight (kg)"},
-      {"k": "blood_type", "l": "Blood Type"},
+      {"k": "blood_type", "l": "Blood Type", "s": ["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"]},
       {"k": "civil_status", "l": "Civil Status", "t": "select", "o": ["Single", "Married", "Widowed", "Separated", "Other/s"]},
       {"k": "civil_status_other", "l": "Other civil status, specify", "if": ["civil_status", "Other/s"]},
       {"k": "umid", "l": "UMID ID No.", "g": "Government ID Numbers"},
@@ -23,7 +23,7 @@
       {"k": "agency_no", "l": "Agency Employee No."},
       {"k": "citizenship", "l": "Citizenship", "t": "select", "o": ["Filipino", "Dual Citizenship"], "g": "Citizenship"},
       {"k": "dual_type", "l": "Dual citizenship by", "t": "select", "o": ["By Birth", "By Naturalization"], "if": ["citizenship", "Dual Citizenship"]},
-      {"k": "dual_country", "l": "Country", "if": ["citizenship", "Dual Citizenship"], "w": 2},
+      {"k": "dual_country", "l": "Country", "if": ["citizenship", "Dual Citizenship"], "w": 2, "s": ["Afghanistan", "Albania", "Algeria", "Andorra", "Angola", "Antigua and Barbuda", "Argentina", "Armenia", "Aruba", "Australia", "Austria", "Azerbaijan", "Bahamas, The", "Bahrain", "Bangladesh", "Barbados", "Belarus", "Belgium", "Belize", "Benin", "Bhutan", "Bolivia", "Bosnia and Herzegovina", "Botswana", "Brazil", "Brunei", "Bulgaria", "Burkina Faso", "Burma", "Burundi", "Cambodia", "Cameroon", "Canada", "Cape Verde", "Central African Republic", "Chad", "Chile", "China", "Colombia", "Comoros", "Congo, Democratic Republic of the", "Congo, Republic of the", "Costa Rica", "Cote d'Ivoire", "Croatia", "Cuba", "Curacao", "Cyprus", "Czech Republic", "Djibouti", "Dominica", "Dominican Republic", "East Timor", "Ecuador", "Egypt", "El Salvador", "Equatorial Guinea", "Eritrea", "Estonia", "Ethiopia", "Fiji", "Finland", "France", "Gabon", "Gambia, The", "Georgia", "Germany", "Ghana", "Greece", "Grenada", "Guatemala", "Guinea", "Guinea-Bissau", "Guyana", "Haiti", "Holy See", "Honduras", "Hong Kong", "Hungary", "Iceland", "India", "Indonesia", "Iran", "Iraq", "Ireland", "Israel", "Italy", "Jamaica", "Japan", "Jordan", "Kazakhstan", "Kenya", "Kiribati", "Korea, North", "Korea, South", "Kosovo", "Kuwait", "Kyrgyzstan", "Laos", "Latvia", "Lebanon", "Lesotho", "Liberia", "Libya", "Liechtenstein", "Lithuania", "Luxembourg", "Macau", "Macedonia", "Madagascar", "Malawi", "Malaysia", "Maldives", "Mali", "Malta", "Marshall Islands", "Mauritania", "Mauritius", "Mexico", "Micronesia", "Moldova", "Monaco", "Mongolia", "Montenegro", "Morocco", "Mozambique", "Namibia", "Nauru", "Nepal", "Netherlands", "Netherlands Antilles", "New Zealand", "Nicaragua", "Niger", "Nigeria", "North Korea", "Norway", "Oman", "Pakistan", "Palau", "Palestinian Territories", "Panama", "Papua New Guinea", "Paraguay", "Peru", "Philippines", "Poland", "Portugal", "Qatar", "Romania", "Russia", "Rwanda", "Saint Kitts and Nevis", "Saint Lucia", "Saint Vincent and the Grenadines", "Samoa", "San Marino", "Sao Tome and Principe", "Saudi Arabia", "Senegal", "Serbia", "Seychelles", "Sierra Leone", "Singapore", "Sint Maarten", "Slovakia", "Slovenia", "Solomon Islands", "Somalia", "South Africa", "South Korea", "South Sudan", "Spain", "Sri Lanka", "Sudan", "Suriname", "Swaziland", "Sweden", "Switzerland", "Syria", "Taiwan", "Tajikistan", "Tanzania", "Thailand", "Timor-Leste", "Togo", "Tonga", "Trinidad and Tobago", "Tunisia", "Turkey", "Turkmenistan", "Tuvalu", "Uganda", "Ukraine", "United Arab Emirates", "United Kingdom", "Uruguay", "Uzbekistan", "Vanuatu", "Venezuela", "Vietnam", "Yemen", "Zambia", "Zimbabwe"], "sw": "Not in the official Excel country list: it will print in the PDF but will not appear in the Excel file."},
       {"k": "res_house", "l": "House/Block/Lot No.", "g": "Residential Address"},
       {"k": "res_street", "l": "Street"},
       {"k": "res_subd", "l": "Subdivision/Village"},
@@ -51,7 +51,7 @@
       {"k": "sp_surname", "l": "Surname", "g": "Spouse"},
       {"k": "sp_first", "l": "First Name"},
       {"k": "sp_middle", "l": "Middle Name"},
-      {"k": "sp_ext", "l": "Name Extension"},
+      {"k": "sp_ext", "l": "Name Extension", "s": ["JR.", "SR.", "II", "III", "IV", "V", "N/A"]},
       {"k": "sp_occupation", "l": "Occupation"},
       {"k": "sp_employer", "l": "Employer/Business Name"},
       {"k": "sp_biz_address", "l": "Business Address"},
@@ -59,7 +59,7 @@
       {"k": "fa_surname", "l": "Surname", "g": "Father"},
       {"k": "fa_first", "l": "First Name"},
       {"k": "fa_middle", "l": "Middle Name"},
-      {"k": "fa_ext", "l": "Name Extension"},
+      {"k": "fa_ext", "l": "Name Extension", "s": ["JR.", "SR.", "II", "III", "IV", "V", "N/A"]},
       {"k": "mo_surname", "l": "Surname", "g": "Mother's Maiden Name"},
       {"k": "mo_first", "l": "First Name"},
       {"k": "mo_middle", "l": "Middle Name"}
@@ -100,7 +100,7 @@
       {
         "k": "eligibility", "l": "Eligibilities", "max": 7,
         "c": [
-          {"k": "name", "l": "Career Service/RA 1080/Board/Bar", "w": 2},
+          {"k": "name", "l": "Career Service/RA 1080/Board/Bar", "w": 2, "s": ["Career Service Professional", "Career Service Subprofessional", "RA 1080 (Board/Bar)", "PD 907 (Honor Graduate Eligibility)", "Barangay Official Eligibility (BOE)", "Barangay Health Worker Eligibility (BHWE)", "Barangay Nutrition Scholar Eligibility (BNSE)", "Barangay Day Care Worker Eligibility (BDCWE)", "Sanggunian Member Eligibility (SME)", "Skills Eligibility - Category II", "Electronic Data Processing Specialist Eligibility (EDPSE)", "Scientific and Technological Specialist Eligibility (STSE)", "Foreign School Honor Graduate Eligibility (FSHGE)", "Veteran Preference Rating (VPR)", "Driver's License (Professional)"]},
           {"k": "rating", "l": "Rating"},
           {"k": "date", "l": "Date of Exam/Conferment", "t": "date"},
           {"k": "place", "l": "Place of Exam/Conferment", "w": 2},
@@ -123,7 +123,7 @@
           {"k": "office", "l": "Department/Agency/Office/Company", "w": 2},
           {"k": "salary", "l": "Monthly Salary", "t": "money"},
           {"k": "sg", "l": "Salary Grade/Step"},
-          {"k": "status", "l": "Status of Appointment"},
+          {"k": "status", "l": "Status of Appointment", "s": ["Permanent", "Temporary", "Casual", "Contractual", "Coterminous", "Substitute", "Provisional", "Elective", "Job Order", "Contract of Service"]},
           {"k": "govt", "l": "Gov't Service", "t": "select", "o": ["Y", "N"]}
         ]
       }
@@ -140,7 +140,7 @@
           {"k": "from", "l": "From", "t": "date"},
           {"k": "to", "l": "To", "t": "date"},
           {"k": "hours", "l": "No. of Hours"},
-          {"k": "type", "l": "Type of LD", "t": "select", "o": ["Managerial", "Supervisory", "Technical", "Foundation", "Other"]},
+          {"k": "type", "l": "Type of LD", "s": ["Managerial", "Supervisory", "Technical", "Foundation"]},
           {"k": "sponsor", "l": "Conducted/Sponsored By", "w": 2}
         ]
       }
@@ -222,7 +222,7 @@
     "id": "references",
     "title": "References and ID",
     "fields": [
-      {"k": "gov_id", "l": "ID type (e.g. Passport, GSIS, SSS, PRC, Driver's License)", "g": "Government Issued ID", "w": 2},
+      {"k": "gov_id", "l": "ID type (e.g. Passport, GSIS, SSS, PRC, Driver's License)", "g": "Government Issued ID", "w": 2, "s": ["Passport", "PhilSys ID / ePhilID", "UMID", "SSS ID", "GSIS e-Card", "PRC ID", "Driver's License", "Postal ID", "Voter's ID", "TIN ID", "PhilHealth ID", "Senior Citizen ID", "PWD ID"]},
       {"k": "gov_id_no", "l": "ID/License/Passport No."},
       {"k": "gov_id_issued", "l": "Date/Place of Issuance"},
       {"k": "date_accomplished", "l": "Date Accomplished", "t": "date", "g": "Signature, Photo and Thumbmark"},

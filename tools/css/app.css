@@ -55,6 +55,8 @@
   .f.check { @apply flex-row items-center gap-2.5 cursor-pointer select-none; }
   .f.check > span { @apply text-sm font-normal text-base-content; }
   .f.q > span:first-child { @apply text-sm font-normal text-base-content leading-snug; }
+  .warn { @apply rounded-field bg-warning/25 px-2.5 py-1.5 text-xs text-warning-content; }
+  .f input:placeholder-shown + .warn { display: none; }
   .w2 { @apply col-span-2; }
   .w3 { @apply col-span-2 @2xl:col-span-3; }
   .w4 { @apply col-span-2 @2xl:col-span-4; }

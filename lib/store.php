@@ -48,18 +48,23 @@ function pds_clean(array $in): array
 {
     $out = ['fields' => [], 'tables' => []];
     $str = fn($v) => is_scalar($v) && preg_match('/^.{0,500}/su', trim((string)$v), $m) ? $m[0] : '';
+    // A typed value matching a suggestion ("s") apart from case and spacing takes the suggestion's exact spelling.
+    $pick = function (array $def, string $v): string {
+        foreach ($def['s'] ?? [] as $o) if (strcasecmp(preg_replace('/\s+/', ' ', $v), $o) === 0) return $o;
+        return $v;
+    };
     foreach (pds_schema() as $sec) {
         foreach ($sec['fields'] ?? [] as $f) {
             $v = $in['fields'][$f['k']] ?? '';
             $t = $f['t'] ?? '';
-            $out['fields'][$f['k']] = $t === 'image' ? pds_image($v) : ($t === 'check' ? ($v === 'Yes' ? 'Yes' : '') : $str($v));
+            $out['fields'][$f['k']] = $t === 'image' ? pds_image($v) : ($t === 'check' ? ($v === 'Yes' ? 'Yes' : '') : $pick($f, $str($v)));
         }
         foreach ($sec['tables'] ?? [] as $t) {
             $rows = is_array($in['tables'][$t['k']] ?? null) ? $in['tables'][$t['k']] : [];
             $rows = array_slice(array_values($rows), 0, $t['max'] ?? 50);
-            $out['tables'][$t['k']] = array_map(function ($row) use ($t, $str) {
+            $out['tables'][$t['k']] = array_map(function ($row) use ($t, $str, $pick) {
                 $r = [];
-                foreach ($t['c'] as $c) $r[$c['k']] = $str(is_array($row) ? ($row[$c['k']] ?? '') : '');
+                foreach ($t['c'] as $c) $r[$c['k']] = $pick($c, $str(is_array($row) ? ($row[$c['k']] ?? '') : ''));
                 return $r;
             }, $rows);
         }
