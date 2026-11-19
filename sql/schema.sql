@@ -17,7 +17,51 @@ CREATE TABLE IF NOT EXISTS pds (
   data MEDIUMTEXT NOT NULL,
   created_at DATETIME NOT NULL,
   updated_at DATETIME NOT NULL,
+  progress TINYINT UNSIGNED NULL,
+  deleted_at DATETIME NULL,
   KEY user_updated (user_id, updated_at),
   KEY updated (updated_at),
+  KEY deleted (deleted_at),
   CONSTRAINT pds_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Usage counts for the admin page (lib/stats.php); no personal data.
+-- period is yyyy-mm-dd for a day or yyyy-mm for a month (unique counts only).
+CREATE TABLE IF NOT EXISTS stats (
+  period VARCHAR(10) NOT NULL,
+  metric VARCHAR(32) NOT NULL,
+  n INT UNSIGNED NOT NULL DEFAULT 0,
+  PRIMARY KEY (period, metric)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Random salt for the current day and month; deleted afterwards so old hashes cannot be traced.
+CREATE TABLE IF NOT EXISTS stats_salt (
+  period VARCHAR(10) PRIMARY KEY,
+  salt CHAR(64) NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Salted hashes already counted this day or month, so each visitor or PDS counts once.
+CREATE TABLE IF NOT EXISTS stats_seen (
+  period VARCHAR(10) NOT NULL,
+  metric VARCHAR(32) NOT NULL,
+  h BINARY(32) NOT NULL,
+  PRIMARY KEY (period, metric, h)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Earlier versions of each PDS, without images (lib/store.php keeps the last 15, at most one per 10 minutes).
+CREATE TABLE IF NOT EXISTS pds_versions (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  pds_id CHAR(16) NOT NULL,
+  saved_at DATETIME NOT NULL,
+  data MEDIUMTEXT NOT NULL,
+  KEY pds_saved (pds_id, saved_at),
+  CONSTRAINT pds_versions_pds FOREIGN KEY (pds_id) REFERENCES pds (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Per-address request counts for rate limits; k is a hash of action, address and time window.
+CREATE TABLE IF NOT EXISTS rate_limit (
+  k BINARY(32) PRIMARY KEY,
+  n INT UNSIGNED NOT NULL,
+  until DATETIME NOT NULL,
+  KEY until (until)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

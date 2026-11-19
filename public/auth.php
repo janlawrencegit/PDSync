@@ -22,12 +22,16 @@ if (isset($_GET['logout'])) {
 if (cfg('GOOGLE_CLIENT_ID') === '') fail_page('Google sign-in is not configured on this server.');
 
 if (isset($_GET['login'])) {
-    header('Location: ' . google_login_url());
+    $url = google_login_url();
+    if (($_GET['next'] ?? '') === 'admin') $_SESSION['oauth']['next'] = 'admin.php';
+    header('Location: ' . $url);
     exit;
 }
 
 if (isset($_GET['error'])) fail_page('Sign-in was cancelled.');
+auth_start();
+$next = $_SESSION['oauth']['next'] ?? '';
 $c = isset($_GET['code'], $_GET['state']) ? google_claims((string)$_GET['code'], (string)$_GET['state']) : null;
 if (!$c) fail_page('Sign-in failed or expired. Please try again.');
 $id = auth_login($c);
-header('Location: ./' . ($id ? "#open=$id" : ''));
+header('Location: ' . ($next === 'admin.php' ? 'admin.php' : './' . ($id ? "#open=$id" : '')));

@@ -1,6 +1,6 @@
 <?php
 // Admin accounts in data/admins.json (bcrypt hashes, created with tools/admin-user.php) and a separate admin session.
-require_once __DIR__ . '/store.php';
+require_once __DIR__ . '/auth.php';
 
 const ADMIN_FILE = DATA_DIR . '/admins.json';
 const ADMIN_ATTEMPTS = DATA_DIR . '/admin-attempts.json';
@@ -43,6 +43,14 @@ function admin_start(): void
 function admin_user(): ?string
 {
     return $_SESSION['admin'] ?? null;
+}
+
+// The signed-in Google account when it is listed in ADMIN_EMAILS. Call it before admin_start(): PHP keeps one
+// session open at a time, and this reads the sign-in session.
+function admin_google(): ?string
+{
+    $u = auth_user();
+    return $u && in_array(strtolower($u['email']), admin_emails(), true) ? $u['email'] : null;
 }
 
 function admin_csrf_ok($token): bool
@@ -102,4 +110,16 @@ function admin_logout(): void
     $_SESSION = [];
     session_destroy();
     setcookie('pds_admin', '', ['expires' => 1, 'path' => '/', 'secure' => https_on(), 'httponly' => true, 'samesite' => 'Strict']);
+}
+
+// True when the visitor is an admin (Google account in ADMIN_EMAILS, or a password admin session). Use it on pages that
+// do not run the admin page's own session handling; it leaves no session open.
+function admin_allowed(): bool
+{
+    if (admin_google()) return true;
+    if (!isset($_COOKIE['pds_admin'])) return false;
+    admin_start();
+    $ok = admin_user() !== null;
+    session_write_close();
+    return $ok;
 }

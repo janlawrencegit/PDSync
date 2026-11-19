@@ -8,6 +8,6 @@ foreach (glob(DATA_DIR . '/*.json') as $file) {
     $id = basename($file, '.json');
     if (!pds_valid_id($id) || !isset($rec['key_hash'], $rec['data'])) continue;
     $at = fn($k) => date('Y-m-d H:i:s', strtotime($rec[$k] ?? 'now'));
-    $st->execute([$id, $rec['key_hash'], FORM_ID, '', json_encode(pds_clean($rec['data'])), $at('created'), $at('updated')]);
+    $st->execute([$id, $rec['key_hash'], pds_form_id(), '', json_encode(pds_clean($rec['data'])), $at('created'), $at('updated')]);
     echo "$id: " . ($st->rowCount() ? 'imported' : 'already there') . "\n";
 }

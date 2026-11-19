@@ -1,0 +1,11 @@
+{
+  "name": "PDSync - Personal Data Sheet",
+  "short_name": "PDSync",
+  "description": "Fill out the CSC Personal Data Sheet (CS Form 212, Revised 2026) and export it as PDF or the official Excel file.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f5f6f8",
+  "theme_color": "#1e3a8a",
+  "icons": [{ "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }]
+}

@@ -1,9 +1,8 @@
 <?php
-// Maps PDS data to the official CS Form 212 (Revised 2026) sheets C1-C4.
+// Maps PDS data to the official CS Form 212 workbook. The constants below are the built-in Revised 2026 map;
+// other versions bring their own map (lib/forms.php), and all code reads the current one through pds_map().
 require_once __DIR__ . '/store.php';
 require_once __DIR__ . '/xlsx.php';
-
-const PDS_TEMPLATE = __DIR__ . '/templates/pds-2026.xlsx';
 
 // Text fields as "Sheet!Cell", space separated when written to several cells.
 const PDS_FIELDS = [
@@ -55,6 +54,20 @@ const PDS_TABLES = [
     'references' => ['C4', 52, ['name' => 'A', 'address' => 'G', 'tel' => 'H']],
 ];
 
+// Official continuation sheets C5-C11: rows past a table's own rows on C1-C4 continue here (schema "more" = their rows).
+// Education continues with the schools beyond the first one per level.
+const PDS_CONT = [
+    'children' => ['C7_Family Background cont. ', 4, ['name' => 'I', 'dob' => 'L']],
+    'education' => ['C8_Educ. Background cont.', 6, ['level' => 'A', 'school' => 'D', 'course' => 'G', 'from' => 'J', 'to' => 'K', 'units' => 'L', 'year_grad' => 'M', 'honors' => 'N']],
+    'eligibility' => ['C9_Elig cont.', 5, ['name' => 'A', 'rating' => 'F', 'date' => 'G', 'place' => 'I', 'license_no' => 'J', 'valid_until' => 'K']],
+    'work' => ['C6_Work Exp cont.', 7, ['from' => 'A', 'to' => 'C', 'position' => 'D', 'office' => 'G', 'salary' => 'J', 'sg' => 'K', 'status' => 'L', 'govt' => 'M']],
+    'learning' => ['C5_L&D cont.', 6, ['title' => 'A', 'from' => 'E', 'to' => 'F', 'hours' => 'G', 'type' => 'H', 'sponsor' => 'I']],
+    'voluntary' => ['C10_Vol. Work cont.', 6, ['org' => 'A', 'from' => 'E', 'to' => 'F', 'hours' => 'G', 'position' => 'H']],
+    'skills' => ['C11_Other Info cont.', 4, ['v' => 'A']],
+    'recognitions' => ['C11_Other Info cont.', 4, ['v' => 'C']],
+    'memberships' => ['C11_Other Info cont.', 4, ['v' => 'I']],
+];
+
 const PDS_EDU_ROWS = ['Elementary' => 55, 'Secondary' => 56, 'Vocational/Trade Course' => 57, 'College' => 58, 'Graduate Studies' => 59];
 const PDS_EDU_COLS = ['school' => 'D', 'course' => 'G', 'from' => 'J', 'to' => 'K', 'units' => 'L', 'year_grad' => 'M', 'honors' => 'N'];
 const PDS_COUNTRY = ['C1', 'J16', 10]; // Dropdown cell and row offset of its list in column Q.
@@ -68,7 +81,22 @@ const PDS_IMAGES = [
     'photo' => ['C4!shape:Text Box 100'],
     'thumbmark' => ['C4!L58'],
 ];
-const PDS_LAYOUT = __DIR__ . '/templates/pds-2026-layout.json';
+
+// Cell map of the current form version: fields, checkboxes, tables, continuation sheets, education rows, the country
+// dropdown, labels to clear and image boxes, in the same shapes as the Revised 2026 constants above.
+function pds_map(): array
+{
+    if (isset($GLOBALS['PDS_MAP'])) return $GLOBALS['PDS_MAP'];
+    $f = form_current();
+    $builtin = [
+        'fields' => PDS_FIELDS, 'checks' => PDS_CHECKS, 'tables' => PDS_TABLES, 'cont' => PDS_CONT,
+        'edu_sheet' => 'C1', 'edu_rows' => PDS_EDU_ROWS, 'edu_cols' => PDS_EDU_COLS,
+        'country' => PDS_COUNTRY, 'clear' => PDS_CLEAR, 'images' => PDS_IMAGES,
+    ];
+    if (!empty($f['builtin'])) return $GLOBALS['PDS_MAP'] = $builtin;
+    $empty = ['fields' => [], 'checks' => [], 'tables' => [], 'cont' => [], 'edu_sheet' => 'C1', 'edu_rows' => [], 'edu_cols' => [], 'country' => null, 'clear' => [], 'images' => []];
+    return $GLOBALS['PDS_MAP'] = ($f['map'] ?? []) + $empty;
+}
 
 // Returns the date or money type of fields and table columns ("table.col") from the schema.
 function pds_key_types(): array
@@ -101,6 +129,25 @@ function pds_max_rows(string $table): int
     return 0;
 }
 
+// Rows of each table that do not fit on C1-C4 and go on its continuation sheet, keyed by their index in the table.
+function pds_overflow(array $d): array
+{
+    $out = [];
+    foreach (array_keys(pds_map()['cont']) as $t) {
+        if ($t === 'education') {
+            $seen = [];
+            $out[$t] = array_filter($d['tables'][$t] ?? [], function ($row) use (&$seen) {
+                $level = $row['level'] ?? '';
+                if (isset(pds_map()['edu_rows'][$level]) && !isset($seen[$level])) return !($seen[$level] = true);
+                return true;
+            });
+        } else {
+            $out[$t] = array_slice($d['tables'][$t] ?? [], pds_max_rows($t), null, true);
+        }
+    }
+    return array_filter($out);
+}
+
 // Converts yyyy-mm-dd to the form's dd/mm/yyyy.
 function pds_to_form_date(string $v): string
 {
@@ -128,27 +175,28 @@ function pds_ref(string $addr): array
 
 function pds_export(array $d): string
 {
-    $b = xlsx_open(file_get_contents(PDS_TEMPLATE));
+    $M = pds_map();
+    $b = xlsx_open(file_get_contents(form_current()['template']));
     $types = pds_key_types();
     $val = fn($v, $key) => pds_display($v, $types[$key] ?? null);
 
-    foreach (PDS_CLEAR as $a) xlsx_set($b, ...[...pds_ref($a), '']);
-    foreach (PDS_FIELDS as $k => $addrs) {
+    foreach ($M['clear'] as $a) xlsx_set($b, ...[...pds_ref($a), '']);
+    foreach ($M['fields'] as $k => $addrs) {
         foreach (explode(' ', $addrs) as $a) xlsx_set($b, ...[...pds_ref($a), $val($d['fields'][$k] ?? '', $k)]);
     }
-    foreach (PDS_CHECKS as $k => $opts) {
+    foreach ($M['checks'] as $k => $opts) {
         foreach ($opts as $opt => $a) xlsx_check($b, ...[...pds_ref($a), ($d['fields'][$k] ?? '') === $opt]);
     }
-    [$sheet, $cell, $offset] = PDS_COUNTRY;
+    [$sheet, $cell, $offset] = $M['country'] ?? [null, null, 0];
     $country = strtolower(pds_trim($d['fields']['dual_country'] ?? ''));
-    for ($i = 2; $country !== '' && $i < 300; $i++) {
+    for ($i = 2; $sheet && $country !== '' && $i < 300; $i++) {
         // Some template entries end with a non-breaking space (e.g. Spain, Thailand), so compare trimmed.
         if (strtolower(pds_trim(xlsx_get($b, $sheet, 'Q' . ($offset + $i)))) === $country) {
             xlsx_select($b, $sheet, $cell, $i);
             break;
         }
     }
-    foreach (PDS_TABLES as $t => [$sheet, $start, $cols]) {
+    foreach ($M['tables'] as $t => [$sheet, $start, $cols]) {
         foreach (array_slice($d['tables'][$t] ?? [], 0, pds_max_rows($t)) as $i => $row) {
             xlsx_merge_row($b, $sheet, $start, $start + $i);
             foreach ($cols as $c => $col) {
@@ -159,10 +207,16 @@ function pds_export(array $d): string
     }
     $seen = [];
     foreach ($d['tables']['education'] ?? [] as $row) {
-        $r = PDS_EDU_ROWS[$row['level'] ?? ''] ?? null;
+        $r = $M['edu_rows'][$row['level'] ?? ''] ?? null;
         if (!$r || isset($seen[$r])) continue;
         $seen[$r] = true;
-        foreach (PDS_EDU_COLS as $c => $col) xlsx_set($b, 'C1', $col . $r, $row[$c] ?? '');
+        foreach ($M['edu_cols'] as $c => $col) xlsx_set($b, $M['edu_sheet'], $col . $r, $row[$c] ?? '');
+    }
+    foreach (pds_overflow($d) as $t => $rows) {
+        [$sheet, $start, $cols] = $M['cont'][$t];
+        foreach (array_values($rows) as $i => $row) {
+            foreach ($cols as $c => $col) xlsx_set($b, $sheet, $col . ($start + $i), $val($row[$c] ?? '', "$t.$c"));
+        }
     }
     pds_export_images($b, $d['fields']);
     return xlsx_save($b);
@@ -172,7 +226,7 @@ function pds_export(array $d): string
 function pds_export_images(array &$b, array $fields): void
 {
     $emu = 12700;
-    $layout = json_decode(file_get_contents(PDS_LAYOUT), true);
+    $layout = form_layout();
     foreach ($layout['items'] as $i) {
         if (!str_starts_with($i['id'], 's:') || empty($i['anchor'])) continue;
         $url = $fields[substr($i['id'], 2)] ?? '';
@@ -185,7 +239,7 @@ function pds_export_images(array &$b, array $fields): void
         $sheet = 'C' . $i['page'];
         // Drawn frames (the photo) take the frame's own anchor so the picture lines up when printed, inset on
         // the long side so the image keeps its shape (the frame's printed aspect comes from the layout box).
-        $addr = current(array_filter(PDS_IMAGES[substr($i['id'], 2)], fn($a) => pds_ref($a)[0] === $sheet));
+        $addr = current(array_filter(pds_map()['images'][substr($i['id'], 2)] ?? [], fn($a) => pds_ref($a)[0] === $sheet));
         $frame = null;
         if (str_contains($addr, '!shape:')) {
             $box = $i['w'] / ($i['h'] * $layout['aspect']);
@@ -204,6 +258,7 @@ function pds_export_images(array &$b, array $fields): void
 
 function pds_import(string $bin): array
 {
+    $M = pds_map();
     $b = xlsx_open($bin);
     $types = pds_key_types();
     $get = function ($a, $key) use (&$b, $types) {
@@ -213,16 +268,16 @@ function pds_import(string $bin): array
     };
     $d = ['fields' => [], 'tables' => []];
 
-    foreach (PDS_FIELDS as $k => $addrs) $d['fields'][$k] = $get(explode(' ', $addrs)[0], $k);
-    foreach (PDS_CHECKS as $k => $opts) {
+    foreach ($M['fields'] as $k => $addrs) $d['fields'][$k] = $get(explode(' ', $addrs)[0], $k);
+    foreach ($M['checks'] as $k => $opts) {
         $d['fields'][$k] = '';
         foreach ($opts as $opt => $a) if (xlsx_checked($b, ...pds_ref($a))) $d['fields'][$k] = $opt;
     }
-    [$sheet, $cell, $offset] = PDS_COUNTRY;
-    $i = (int)xlsx_get($b, $sheet, $cell);
-    $d['fields']['dual_country'] = $i > 1 && $d['fields']['citizenship'] === 'Dual Citizenship' ? pds_trim(xlsx_get($b, $sheet, 'Q' . ($offset + $i))) : '';
+    [$sheet, $cell, $offset] = $M['country'] ?? [null, null, 0];
+    $i = $sheet ? (int)xlsx_get($b, $sheet, $cell) : 0;
+    $d['fields']['dual_country'] = $i > 1 && ($d['fields']['citizenship'] ?? '') === 'Dual Citizenship' ? pds_trim(xlsx_get($b, $sheet, 'Q' . ($offset + $i))) : '';
 
-    foreach (PDS_TABLES as $t => [$sheet, $start, $cols]) {
+    foreach ($M['tables'] as $t => [$sheet, $start, $cols]) {
         $d['tables'][$t] = [];
         for ($i = 0; $i < pds_max_rows($t); $i++) {
             $row = [];
@@ -231,10 +286,21 @@ function pds_import(string $bin): array
         }
     }
     $d['tables']['education'] = [];
-    foreach (PDS_EDU_ROWS as $level => $r) {
+    foreach ($M['edu_rows'] as $level => $r) {
         $row = ['level' => $level];
-        foreach (PDS_EDU_COLS as $c => $col) $row[$c] = xlsx_get($b, 'C1', $col . $r);
+        foreach ($M['edu_cols'] as $c => $col) $row[$c] = xlsx_get($b, $M['edu_sheet'], $col . $r);
         if (implode('', array_slice($row, 1)) !== '') $d['tables']['education'][] = $row;
+    }
+    // Continuation sheets, when the file has them.
+    foreach ($M['cont'] as $t => [$sheet, $start, $cols]) {
+        if (!isset($b['sheets'][$sheet])) continue;
+        $more = 0;
+        foreach (pds_schema() as $sec) foreach ($sec['tables'] ?? [] as $tt) if ($tt['k'] === $t) $more = $tt['more'] ?? 0;
+        for ($i = 0; $i < $more; $i++) {
+            $row = [];
+            foreach ($cols as $c => $col) $row[$c] = $get("$sheet!$col" . ($start + $i), "$t.$c");
+            if (implode('', $row) !== '') $d['tables'][$t][] = $row;
+        }
     }
     return pds_clean($d);
 }

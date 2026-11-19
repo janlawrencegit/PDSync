@@ -1,4 +1,13 @@
 /* Official-form preview (view.php, and the cloned pages in the print dialog): template page images with values overlaid. */
+/* Narrow bold for answers on the form: Arial Narrow Bold where the device has it (the official look), otherwise the
+   self-hosted Roboto Condensed Bold (SIL Open Font License), so phones without Arial Narrow look the same. */
+@font-face {
+  font-family: "PDS Narrow";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: local("Arial Narrow Bold"), local("ArialNarrow-Bold"), url("fonts/roboto-condensed-latin-700-normal.woff2") format("woff2");
+}
 .official *, .pg, .pg * { box-sizing: border-box; }
 .official { margin: 0; background: #e9ebee; padding: 0 16px 24px; font: 14px/1.4 system-ui, sans-serif; }
 .official.embed { padding: 12px; }
@@ -6,7 +15,7 @@
 .official.fit-page .pg { width: calc((100vh - 24px) / var(--ar)); }
 .pg { position: relative; container-type: inline-size; max-width: 900px; margin: 0 auto 16px; background: #fff; box-shadow: 0 1px 4px rgba(0,0,0,.2); }
 .pg img { display: block; width: 100%; max-width: 100%; }
-.ov { position: absolute; display: flex; align-items: center; overflow: hidden; padding: 0 .3cqw; font-family: "Arial Narrow", "Roboto Condensed", Arial, sans-serif; font-stretch: condensed; font-weight: bold; line-height: 1.1; color: #000; }
+.ov { position: absolute; display: flex; align-items: center; overflow: hidden; padding: 0 .3cqw; font-family: "PDS Narrow", "Arial Narrow", "Roboto Condensed", Arial, sans-serif; font-stretch: condensed; font-weight: bold; line-height: 1.1; color: #000; }
 .ov.v-top { align-items: flex-start; }
 .ov.v-bottom { align-items: flex-end; }
 .ov span { white-space: normal; }
@@ -18,7 +27,36 @@ img.ov.pic { object-fit: contain; padding: .3cqw; box-sizing: border-box; }
 img.ov.pic-photo { object-fit: contain; padding: .3cqw; background: #fff content-box; }
 .ov.chk path { fill: none; stroke: #000; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
 .ov.sel { background: #fff; padding-left: .5cqw; }
+/* Continuation sheets (C5-C11), drawn in HTML in the form's style. */
+.pg.cont { font-family: Arial, sans-serif; color: #000; }
+.cont-in { position: absolute; inset: 4cqw 4cqw 4cqw 4cqw; display: flex; flex-direction: column; }
+.cont-form { margin: 0 0 .8cqw; font: italic bold 1.2cqw Arial, sans-serif; }
+.cont h2 { margin: 0; padding: .5cqw .8cqw; background: #969696; color: #fff; font: italic bold 1.5cqw Arial, sans-serif; border: .15cqw solid #000; }
+.cont-sub { margin: 0; padding: .3cqw .8cqw; font-size: 1.1cqw; font-style: italic; border: .15cqw solid #000; border-top: 0; }
+.cont table { width: 100%; border-collapse: collapse; table-layout: auto; font-size: 1.2cqw; }
+.cont th { background: #eaeaea; font-size: 1cqw; font-weight: normal; padding: .4cqw; border: .15cqw solid #000; vertical-align: middle; }
+.cont td { height: 2.2cqw; padding: .2cqw .5cqw; border: .1cqw solid #000; font-family: "PDS Narrow", "Arial Narrow", "Roboto Condensed", Arial, sans-serif; font-weight: bold; vertical-align: middle; overflow-wrap: anywhere; }
+.cont-sign { display: grid; grid-template-columns: 2fr 1fr; margin-top: auto; border: .15cqw solid #000; font-size: 1.1cqw; }
+.cont-sign > div { display: flex; align-items: stretch; }
+.cont-sign > div + div { border-left: .15cqw solid #000; }
+.cont-sign span { display: flex; align-items: center; padding: 0 1cqw; background: #eaeaea; font-weight: bold; font-style: italic; border-right: .15cqw solid #000; }
+.cont-sign b { flex: 1; display: flex; align-items: center; justify-content: center; height: 5cqw; font-size: 1.3cqw; }
+.cont-sign img { max-height: 4.4cqw; max-width: 90%; }
+
+/* Interactive preview (embed only): boxes show where a click goes, and the field being edited is highlighted. */
+.hit { position: absolute; }
+.embed { user-select: none; -webkit-user-select: none; }
+.embed [data-id] { cursor: pointer; }
+.embed.panning, .embed.panning [data-id] { cursor: grabbing; }
+.embed .hit:hover, .embed .ov:hover, .embed td[data-id]:hover { outline: 1.5px solid rgb(37 99 235 / .7); outline-offset: -1px; background-color: rgb(59 130 246 / .1); }
+.embed .hl { outline: 2px solid #f59e0b !important; outline-offset: -1px; background-color: rgb(250 204 21 / .28) !important; }
+.official.zoomed .pg { width: var(--pgw); max-width: none; }
+.official.zoomed { width: max-content; min-width: 100%; }
+.official.zoomed .pg { margin-left: auto; margin-right: auto; }
+
 @media print {
+  .hit { display: none; }
+  .hl { outline: none !important; background: none !important; }
   @page { size: A4; margin: 0; }
   .official { background: #fff; padding: 0; }
   .pg { max-width: none; margin: 0; box-shadow: none; break-after: page; }

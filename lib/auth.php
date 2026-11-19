@@ -1,6 +1,7 @@
 <?php
 // Optional Google sign-in (OAuth 2.0 code flow with PKCE); the session holds only the user id.
 require_once __DIR__ . '/store.php';
+require_once __DIR__ . '/stats.php';
 
 const AUTH_COOKIE = 'pds_auth';
 const PDS_COOKIE = 'pds_session';
@@ -52,7 +53,8 @@ function pds_cookie(): array
 function pds_cookie_set(?string $id, ?string $key): void
 {
     setcookie(PDS_COOKIE, $id ? "$id:$key" : '', [
-        'expires' => $id ? time() + 10 * 365 * 86400 : 1,
+        // Renewed on every save, so an active PDS stays reachable while an abandoned one expires with its record.
+        'expires' => $id ? time() + ANON_DAYS * 86400 : 1,
         'path' => '/',
         'secure' => https_on(),
         'httponly' => true,
@@ -119,9 +121,12 @@ function google_claims(string $code, string $state): ?array
 // Creates or updates the user, starts a fresh session, and moves this browser's anonymous PDS into the account; returns its id.
 function auth_login(array $c): ?string
 {
-    db()->prepare('INSERT INTO users (google_sub, email, name, created_at, last_login) VALUES (?, ?, ?, NOW(), NOW())
-        ON DUPLICATE KEY UPDATE email = VALUES(email), name = VALUES(name), last_login = NOW()')
-        ->execute([$c['sub'], $c['email'], substr((string)($c['name'] ?? ''), 0, 255)]);
+    $ins = db()->prepare('INSERT INTO users (google_sub, email, name, created_at, last_login) VALUES (?, ?, ?, NOW(), NOW())
+        ON DUPLICATE KEY UPDATE email = VALUES(email), name = VALUES(name), last_login = NOW()');
+    $ins->execute([$c['sub'], $c['email'], substr((string)($c['name'] ?? ''), 0, 255)]);
+    // MySQL reports 1 affected row for a new user and 2 for an update.
+    if ($ins->rowCount() === 1) stats_add('signup');
+    stats_add('signin');
     $st = db()->prepare('SELECT id FROM users WHERE google_sub = ?');
     $st->execute([$c['sub']]);
     $uid = (int)$st->fetchColumn();
