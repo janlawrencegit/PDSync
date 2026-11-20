@@ -12,6 +12,7 @@ $I = [
     'file' => '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/>',
     'upload' => '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m17 8-5-5-5 5"/><path d="M12 3v12"/>',
     'plus' => '<path d="M12 5v14M5 12h14"/>',
+    'check' => '<path d="M20 6 9 17l-5-5"/>',
     'help' => '<circle cx="12" cy="12" r="10"/><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3"/><path d="M12 17h.01"/>',
     'more' => '<circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/>',
     'history' => '<path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/>',
@@ -37,10 +38,10 @@ $I = [
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>PDSync - CS Form 212 Personal Data Sheet</title>
+<title>PDSync - CS Form No. 212 Personal Data Sheet</title>
 <meta name="description" content="Fill out the CSC Personal Data Sheet (<?= h($formName) ?>) with a live preview, then export it as PDF or the official Excel file.">
 <meta name="theme-color" content="#1e3a8a">
-<script>
+<script nonce="<?= csp_nonce() ?>">
   // Applies the saved theme before the page paints, so dark mode does not flash white.
   try { const t = localStorage.getItem('pds-theme'); if (t) document.documentElement.dataset.theme = t; } catch {}
 </script>
@@ -84,6 +85,8 @@ $I = [
         <li class="md:hidden"><button data-act="new"><?= $icon($I['plus']) ?>New PDS</button></li>
         <li class="md:hidden"><button data-act="help"><?= $icon($I['help']) ?>Help and instructions</button></li>
         <li class="md:hidden"><button data-act="rename-file"><?= $icon($I['file']) ?>File name</button></li>
+        <li><button data-act="wes"><?= $icon($I['file']) ?>Work Experience Sheet</button></li>
+        <li><button data-act="merge"><?= $icon('<rect x="8" y="8" width="13" height="13" rx="2"/><path d="M4 16V5a1 1 0 0 1 1-1h11"/>') ?>Merge PDFs</button></li>
         <li><button data-act="versions"><?= $icon($I['history']) ?>Version history</button></li>
         <li><button data-act="backup"><?= $icon($I['download']) ?>Download a copy (.json)</button></li>
         <li><label><?= $icon($I['folder']) ?>Open a copy (.json)<input id="inp-backup" type="file" accept=".json,application/json" hidden></label></li>
@@ -112,7 +115,10 @@ $I = [
         <li class="menu-head"><div class="acct-head"><span class="acct-ava"><?= h(strtoupper(substr($user['name'] ?: $user['email'], 0, 1))) ?></span><span class="min-w-0"><b class="block truncate"><?= h($user['name'] ?: 'Your account') ?></b><small class="block truncate"><?= h($user['email']) ?></small></span></div></li>
         <?php if (in_array(strtolower($user['email']), admin_emails(), true)): ?><li><a href="admin.php"><?= $icon('<path d="M3 3v18h18"/><path d="M7 15l4-4 3 3 5-6"/>') ?>Admin dashboard</a></li><?php endif; ?>
         <li><a href="library.php"><?= $icon($I['library']) ?>My PDS</a></li>
-        <li><button type="submit" form="form-logout"><?= $icon($I['logout']) ?>Sign out</button></li>
+        <li class="menu-title">Your data</li>
+        <li><a href="account.php?export" download><?= $icon('<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/><path d="M12 15V3"/>') ?>Download all my data</a></li>
+        <li><button type="button" data-acct="delete" class="text-error"><?= $icon('<path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>') ?>Delete my account</button></li>
+        <li class="mt-1 border-t border-base-300 pt-1"><button type="submit" form="form-logout"><?= $icon($I['logout']) ?>Sign out</button></li>
       </ul>
       <form method="post" action="auth.php?logout" id="form-logout" hidden></form>
     </div>
@@ -137,6 +143,7 @@ $I = [
       <div class="flex items-center gap-3 px-3 pb-1 pt-2 2xl:block 2xl:pt-3">
         <progress id="progress" class="progress progress-success h-1.5 w-full" value="0" max="10"></progress>
         <p id="progress-text" class="shrink-0 text-[11px] text-base-content/60 2xl:mt-1"></p>
+        <button id="btn-check" type="button" class="chk-btn"><?= $icon($I['check'], 'size-3.5') ?>Check my PDS</button>
       </div>
     </div>
   </nav>
@@ -202,13 +209,90 @@ $I = [
 
 
 
+<dialog id="dlg-check" class="modal">
+  <div class="modal-box max-w-xl p-0">
+    <div id="chk-head" class="chk-head"></div>
+    <div id="chk-body" class="chk-body"></div>
+    <div class="chk-foot">
+      <form method="dialog"><button class="btn btn-ghost btn-sm">Close</button></form>
+      <button id="chk-export" class="btn btn-primary btn-sm gap-1.5"><?= $icon($I['download']) ?>Export</button>
+    </div>
+  </div>
+  <form method="dialog" class="modal-backdrop"><button>close</button></form>
+</dialog>
+
+<dialog id="dlg-merge" class="modal">
+  <div class="modal-box wes-box p-0">
+    <div class="wes-head">
+      <div class="min-w-0">
+        <p class="eyebrow !mt-0">Submission packet</p>
+        <h3 class="title-serif text-2xl">Merge PDFs</h3>
+        <p class="text-xs text-base-content/60">Put your PDS, Work Experience Sheet and supporting documents (certificates, transcript, eligibility) into one PDF, in the order you choose.</p>
+      </div>
+      <form method="dialog"><button class="btn btn-ghost btn-sm btn-square" aria-label="Close"><?= $icon('<path d="M18 6 6 18M6 6l12 12"/>') ?></button></form>
+    </div>
+    <div class="wes-tools">
+      <label class="btn btn-sm btn-primary btn-soft gap-1.5"><?= $icon($I['plus']) ?>Add files<input id="merge-input" type="file" accept="application/pdf,.pdf,image/png,image/jpeg" multiple hidden></label>
+      <span class="text-xs text-base-content/55">PDF, JPG or PNG. Pictures become A4 pages.</span>
+      <span id="merge-count" class="ml-auto text-xs font-medium text-base-content/60"></span>
+    </div>
+    <div id="merge-drop" class="merge-drop">
+      <ol id="merge-list" class="merge-list"></ol>
+      <div id="merge-empty" class="merge-empty">
+        <span class="merge-empty-ico"><?= $icon('<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m17 8-5-5-5 5"/><path d="M12 3v12"/>', 'size-6') ?></span>
+        <b>Drop files here, or use Add files</b>
+        <p>Tip: export your PDS with <b>Export &rarr; PDF</b> and your Work Experience Sheet first, then add them here with your certificates.</p>
+      </div>
+    </div>
+    <div class="chk-foot items-center">
+      <span class="mr-auto flex items-center gap-1.5 text-xs text-base-content/55"><?= $icon('<rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>', 'size-3.5') ?>Merged on your device. Files are never uploaded.</span>
+      <form method="dialog"><button class="btn btn-ghost btn-sm">Close</button></form>
+      <button id="merge-go" type="button" class="btn btn-primary btn-sm gap-1.5" disabled><?= $icon($I['download']) ?>Merge and download</button>
+    </div>
+  </div>
+</dialog>
+
+<dialog id="dlg-wes" class="modal">
+  <div class="modal-box wes-box p-0">
+    <div class="wes-head">
+      <div class="min-w-0">
+        <p class="eyebrow !mt-0">Attachment to CS Form No. 212</p>
+        <h3 class="title-serif text-2xl">Work Experience Sheet</h3>
+        <p class="text-xs text-base-content/60">Include only the work relevant to the position you are applying for, most recent first. Duties and accomplishments go here, as the PDS asks.</p>
+      </div>
+      <form method="dialog"><button class="btn btn-ghost btn-sm btn-square" aria-label="Close"><?= $icon('<path d="M18 6 6 18M6 6l12 12"/>') ?></button></form>
+    </div>
+    <div class="wes-tools">
+      <div class="dropdown">
+        <div tabindex="0" role="button" class="btn btn-sm btn-primary btn-soft gap-1.5"><?= $icon($I['plus']) ?>Add from Work Experience</div>
+        <ul tabindex="0" id="wes-from" class="menu dropdown-content z-50 mt-2 w-80 max-h-72 flex-nowrap overflow-y-auto rounded-box border border-base-300 bg-base-100 p-2 shadow-lg"></ul>
+      </div>
+      <button id="wes-add" type="button" class="btn btn-sm btn-ghost gap-1.5"><?= $icon($I['plus']) ?>Blank entry</button>
+      <span id="wes-count" class="ml-auto text-xs text-base-content/55"></span>
+    </div>
+    <div id="wes-list" class="wes-list"></div>
+    <div class="chk-foot">
+      <form method="dialog"><button class="btn btn-ghost btn-sm">Done</button></form>
+      <button id="wes-docx" type="button" class="btn btn-ghost btn-sm gap-1.5" title="The official CSC template, filled in, as an editable Word file"><?= $icon($I['file']) ?>Word (.docx)</button>
+      <button id="wes-pdf" type="button" class="btn btn-primary btn-sm gap-1.5"><?= $icon($I['download']) ?>Download PDF</button>
+    </div>
+  </div>
+</dialog>
+
 <dialog id="dlg-export" class="modal">
   <div class="modal-box max-w-lg">
     <h3 class="text-lg font-semibold">Export PDS</h3>
     <p class="text-sm text-base-content/60">File name: <b id="dlg-name" class="text-base-content"></b></p>
     <div id="review" class="review mt-4"></div>
-    <div class="mt-4 grid gap-3">
+    <div class="oath mt-4">
+      <p class="oath-title"><?= $icon('<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>', 'size-4') ?>Declaration on the form</p>
+      <blockquote>I declare under oath that I have personally accomplished this Personal Data Sheet which is a true, correct, and complete statement pursuant to the provisions of pertinent laws, rules, and regulations of the Republic of the Philippines. I authorize the agency head/authorized representative to verify/validate the contents stated herein. I agree that any misrepresentation made in this document and its attachments shall cause the filing of administrative/criminal case/s against me.</blockquote>
+      <label class="consent-check"><input id="oath-ok" type="checkbox" class="checkbox checkbox-primary checkbox-sm"><span>I have read this declaration. My answers are true, correct and complete, and I will sign it myself.</span></label>
+    </div>
+    <div class="mt-4 grid gap-3" id="exp-choices">
       <button id="exp-pdf" class="choice"><strong>PDF or print</strong><span>Choose paper and pages, then your browser's print window opens. Pick "Save as PDF" to get a file.</span></button>
+      <button id="exp-merge" class="choice"><strong>Merge PDFs</strong><span>Combine your PDS, Work Experience Sheet and certificates into one PDF to submit. Done on your device.</span></button>
+      <button id="exp-wes" class="choice"><strong>Work Experience Sheet</strong><span>The official CSC attachment for your duties and accomplishments, as PDF or Word.</span></button>
       <button id="exp-xlsx" class="choice"><strong>Excel (.xlsx)</strong><span>The official <?= h($formName) ?> workbook, including continuation sheets.</span></button>
     </div>
     <form method="dialog" class="modal-action"><button class="btn btn-ghost">Cancel</button></form>
@@ -218,7 +302,7 @@ $I = [
 <dialog id="dlg-crop" class="modal">
   <div class="modal-box w-fit max-w-[96vw]">
     <h3 class="text-lg font-semibold">Crop image</h3>
-    <p class="text-sm text-base-content/60">Drag the box to move it, or drag a corner to resize.</p>
+    <p id="crop-tip" class="text-sm text-base-content/60">Drag the box to move it, or drag a corner to resize.</p>
     <div class="mt-4 flex justify-center rounded-box bg-neutral p-3"><canvas id="crop-canvas" class="block max-w-full cursor-crosshair touch-none"></canvas></div>
     <form method="dialog" class="modal-action">
       <button class="btn btn-ghost" value="cancel">Cancel</button>
@@ -265,11 +349,13 @@ $I = [
       </ul>
       <h4>How PDSync helps</h4>
       <ul>
-        <li>Your answers save automatically as you type, on this device and on our server. The status next to the file name shows when it is saved.</li>
+        <li>Your answers save automatically as you type, on this device and, once you agree to the privacy notice, encrypted on our server. The status next to the file name shows when it is saved.</li>
         <li>A check mark on a section means every item in it is answered. A half circle means it is started.</li>
         <li>On the preview, the item you are typing is highlighted. Click any box to jump to its item. Drag to move around; zoom with the + and - buttons, Ctrl + scroll, or two fingers.</li>
         <li>Yellow notes under a field point out values that look unusual, such as height in centimeters. They never stop you from saving.</li>
-        <li>Export checks for empty items first, then gives you a PDF or the official Excel file.</li>
+        <li><b>Check my PDS</b> lists empty items and possible mistakes, such as overlapping work dates. Click an item to go straight to it.</li>
+        <li><b>Export</b> asks you to confirm the declaration, then gives you a PDF or the official Excel file. You can also merge your supporting documents into the PDF.</li>
+        <li>The <b>Work Experience Sheet</b> fills the official template from your work entries, as a PDF or Word file. <b>Merge PDFs</b> joins any PDF files into one, right in your browser.</li>
         <li>Version history lets you go back to an earlier copy. "Download a copy" keeps a backup file on your device.</li>
       </ul>
       <h4>Keyboard</h4>
@@ -283,6 +369,29 @@ $I = [
   </div>
 </dialog>
 
+<dialog id="dlg-consent" class="modal">
+  <div class="modal-box max-w-lg p-0">
+    <div class="consent-head">
+      <span class="hero-icon !size-11 !rounded-xl"><?= $icon('<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/>', 'size-5') ?></span>
+      <div><p class="eyebrow !mt-0">Data Privacy Act of 2012</p><h3 class="title-serif text-2xl">Your privacy comes first</h3></div>
+    </div>
+    <div class="consent-body">
+      <p>Before PDSync saves your PDS on our server, please read how we handle it.</p>
+      <ul class="consent-list">
+        <li><b>What we keep.</b> Your PDS answers, which include <em>sensitive personal information</em> such as government ID numbers, age, civil status and your answers to Questions 34&ndash;40, plus your photo and signature if you add them.</li>
+        <li><b>Why.</b> Only so you can fill out, save, preview and export your PDS. We never sell or share it.</li>
+        <li><b>How it is protected.</b> Encrypted on our server, and only you can open it.</li>
+        <li><b>Your rights.</b> Download or delete your data any time, and you may complain to the National Privacy Commission.</li>
+      </ul>
+      <label class="consent-check"><input id="consent-ok" type="checkbox" class="checkbox checkbox-primary checkbox-sm"><span>I have read the <a href="privacy.php" target="_blank" class="link link-primary">Privacy notice</a> and I agree that PDSync keeps my answers for this purpose.</span></label>
+    </div>
+    <div class="consent-foot">
+      <button id="consent-no" class="btn btn-ghost btn-sm" type="button">Not now, keep it on this device</button>
+      <button id="consent-yes" class="btn btn-primary btn-sm" type="button" disabled>Agree and continue</button>
+    </div>
+  </div>
+</dialog>
+
 <dialog id="dlg-welcome" class="modal">
   <div class="modal-box max-w-lg">
     <p class="text-xs font-semibold uppercase tracking-wider text-primary">Welcome to PDSync</p>
@@ -293,7 +402,7 @@ $I = [
       <li><b>Export.</b> Get a PDF to print or the official Excel file.</li>
     </ol>
     <div class="mt-4 rounded-box bg-base-200 p-3 text-sm text-base-content/75">
-      Your PDS is kept only for you: on this browser, or in your account if you sign in with Google. We never share it.
+      Your PDS is kept only for you: on this browser and, if you agree, encrypted on our server. Sign in with Google to keep several PDS in one place. We never share it.
       On a shared computer, delete it from the <b>&middot;&middot;&middot;</b> menu when you finish. <a class="link" href="privacy.php">Privacy notice</a>
     </div>
     <form method="dialog" class="modal-action"><button class="btn btn-primary">Start</button></form>
@@ -340,7 +449,7 @@ $I = [
   </div>
 </dialog>
 
-<script>window.SCHEMA = <?= json_encode(pds_schema()) ?>; window.USER = <?= json_encode($user ? true : false) ?>; window.FORM = <?= json_encode(['id' => $form['id'], 'name' => $formName]) ?>;</script>
+<script nonce="<?= csp_nonce() ?>">window.SCHEMA = <?= json_encode(pds_schema()) ?>; window.USER = <?= json_encode($user ? true : false) ?>; window.FORM = <?= json_encode(['id' => $form['id'], 'name' => $formName]) ?>; window.CONSENT = <?= json_encode(CONSENT_VERSION) ?>;</script>
 <script type="module" src="vendor/cally-0.9.2.js"></script>
 <script src="ui.js?v=<?= $v('ui.js') ?>"></script>
 <script src="app.js?v=<?= $v('app.js') ?>"></script>

@@ -35,14 +35,14 @@ function setSave(kind, text) {
   p.dataset.state = kind;
   p.querySelector('.txt').textContent = text || {
     idle: 'Not saved yet', unsaved: 'Unsaved changes', saving: 'Saving…', saved: 'Saved',
-    offline: 'Offline · kept on this device', error: 'Not saved · Retry',
+    offline: 'Offline · kept on this device', error: 'Not saved · Retry', local: 'On this device only',
   }[kind];
   p.title = kind === 'saved' ? `Saved ${new Date().toLocaleTimeString()}` : p.querySelector('.txt').textContent;
 }
 
 // Opens the cropper on an image; resolves with the cropped region on a canvas, or null when cancelled.
 // With an aspect (width / height) the crop box keeps that shape; otherwise it is free.
-function cropImage(bmp, aspect) {
+function cropImage(bmp, aspect, guide = false) {
   return new Promise((resolve) => {
     const dlg = $('#dlg-crop'), cv = $('#crop-canvas'), g = cv.getContext('2d');
     const k = Math.min(760 / bmp.width, 460 / bmp.height);
@@ -66,6 +66,21 @@ function cropImage(bmp, aspect) {
       g.strokeRect(r.x, r.y, r.w, r.h);
       g.fillStyle = '#1f4fa3';
       [[r.x, r.y], [r.x + r.w, r.y], [r.x, r.y + r.h], [r.x + r.w, r.y + r.h]].forEach(([x, y]) => g.fillRect(x - HANDLE / 2, y - HANDLE / 2, HANDLE, HANDLE));
+      if (guide) {
+        // Passport framing: the face fills the oval, eyes near the line, with room above the head and the shoulders below.
+        g.save();
+        g.setLineDash([6, 5]);
+        g.strokeStyle = 'rgba(255,255,255,.9)';
+        g.lineWidth = 1.5;
+        g.beginPath();
+        g.ellipse(r.x + r.w / 2, r.y + r.h * 0.43, r.w * 0.3, r.h * 0.29, 0, 0, Math.PI * 2);
+        g.stroke();
+        g.beginPath();
+        g.moveTo(r.x + r.w * 0.2, r.y + r.h * 0.4);
+        g.lineTo(r.x + r.w * 0.8, r.y + r.h * 0.4);
+        g.stroke();
+        g.restore();
+      }
     };
     const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
     // Pointer position in canvas pixels, since CSS may shrink the canvas on small screens.
@@ -113,10 +128,70 @@ function cropImage(bmp, aspect) {
       resolve(out);
     };
     dlg.returnValue = '';
+    $('#crop-tip').textContent = guide ? 'Fit your face inside the oval, with your eyes near the line and your shoulders showing.' : 'Drag the box to move it, or drag a corner to resize.';
     draw();
     dlg.showModal();
   });
 }
+
+// Checks a passport photo in the browser (nothing is uploaded for this): print sharpness, a plain light background,
+// lighting of the face area, and blur. Resolves with [{ tone: 'ok'|'warn'|'bad', text }].
+function photoCheck(src) {
+  return new Promise((resolve) => {
+    const im = new Image();
+    im.onload = () => {
+      const W = 200, H = Math.round((200 * im.naturalHeight) / im.naturalWidth);
+      const c = el('canvas', { width: W, height: H }), g = c.getContext('2d', { willReadFrequently: true });
+      g.drawImage(im, 0, 0, W, H);
+      const d = g.getImageData(0, 0, W, H).data;
+      const lum = (x, y) => { const i = (y * W + x) * 4; return 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2]; };
+      const stats = (pts) => { const v = pts.map(([x, y]) => lum(x, y)); const m = v.reduce((a, b) => a + b, 0) / v.length; return [m, Math.sqrt(v.reduce((a, b) => a + (b - m) ** 2, 0) / v.length)]; };
+      const bg = [], face = [];
+      for (let y = 0; y < H; y += 2) for (let x = 0; x < W; x += 2) {
+        if (y < H * 0.12 || (y < H * 0.45 && (x < W * 0.1 || x > W * 0.9))) bg.push([x, y]);
+        if (x > W * 0.3 && x < W * 0.7 && y > H * 0.22 && y < H * 0.62) face.push([x, y]);
+      }
+      const [bgL, bgS] = stats(bg), [fL] = stats(face);
+      let lap = 0, n = 0;
+      for (let y = Math.round(H * 0.2); y < H * 0.7; y++) for (let x = Math.round(W * 0.25); x < W * 0.75; x++) {
+        const v = 4 * lum(x, y) - lum(x - 1, y) - lum(x + 1, y) - lum(x, y - 1) - lum(x, y + 1);
+        lap += v * v; n++;
+      }
+      const sharp = lap / n, px = im.naturalWidth, out = [];
+      out.push(px >= 413 ? { tone: 'ok', text: 'Sharp enough to print at 3.5 × 4.5 cm' }
+        : px >= 260 ? { tone: 'warn', text: 'Small image: it may print a little soft. Use a larger photo if you have one.' }
+          : { tone: 'bad', text: 'Very small image: it will print blurry. Use a larger photo.' });
+      out.push(bgS > 30 ? { tone: 'warn', text: 'The background looks busy. Stand in front of a plain wall.' }
+        : bgL < 150 ? { tone: 'warn', text: 'The background is dark. A plain white or light background is usual for ID photos.' }
+          : { tone: 'ok', text: 'Plain, light background' });
+      out.push(fL < 60 ? { tone: 'warn', text: 'The face looks too dark. Use more light, facing a window.' }
+        : fL > 215 ? { tone: 'warn', text: 'The face looks washed out. Avoid direct flash or strong light.' }
+          : { tone: 'ok', text: 'Face is well lit' });
+      if (sharp < 25) out.push({ tone: 'warn', text: 'The photo looks blurry. Hold the camera steady or use a clearer copy.' });
+      resolve(out);
+    };
+    im.onerror = () => resolve([]);
+    im.src = src;
+  });
+}
+function photoReport(list, src) {
+  list.replaceChildren();
+  if (!src) return;
+  photoCheck(src).then((rows) => list.replaceChildren(
+    ...rows.map((r) => el('li', { className: r.tone }, icon(r.tone === 'ok' ? ICON.check : ICON.more, 'size-3.5'), r.text)),
+    el('li', { className: 'info' }, icon(ICON.calendar, 'size-3.5'), 'Use a photo taken within the last 6 months.')));
+}
+
+// Which signature the form accepts, from what the Revised 2026 form prints in its signature boxes.
+const signatureGuide = () => el('details', { className: 'sig-guide' },
+  el('summary', {}, 'Which signature can I use?'),
+  el('ul', {},
+    el('li', {}, el('b', {}, 'E-signature: '), 'the Revised 2026 PDS prints "e-signature/digital certificate" in its signature boxes, so a clear image of your signature is accepted there.'),
+    el('li', {}, el('b', {}, 'Digital certificate: '), 'if you have a PNPKI certificate from DICT, export the PDF here, then sign it with your certificate (for example in Adobe Acrobat Reader).'),
+    el('li', {}, el('b', {}, 'Handwritten: '), 'leave this empty and sign the printout with a pen. This is always accepted.'),
+    el('li', {}, el('b', {}, 'Oath box: '), 'the person administering the oath signs their own box; the form says an e-signature or digital certificate is allowed there except for a notary public.'),
+    el('li', { className: 'opacity-70' }, 'When unsure, ask the HR office receiving your PDS which one they prefer.')));
+
 
 // Shrinks a cropped image; "clean" makes near-white paper transparent and trims margins (signature, thumbmark).
 function encodeImage(src, clean) {
@@ -315,19 +390,7 @@ function placeOptions(def) {
   return got[city.code] || [];
 }
 // After a city is chosen, an empty province is filled from it.
-function placeFill(def) {
-  if (def.place !== 'city') return;
-  const pre = def.k.split('_')[0];
-  if (filled(state.fields[`${pre}_prov`])) return;
-  const city = places.city(state.fields[def.k]);
-  if (!city) return;
-  state.fields[`${pre}_prov`] = city.prov.n;
-  const n = document.querySelector(`[data-k="${pre}_prov"]`);
-  const inp = n?.matches('input') ? n : n?.querySelector('input');
-  if (inp) inp.value = city.prov.n;
-}
-
-// Gentle checks for values that look wrong; they show under the field and in the export review, never block saving.
+// Gentle checks for values that look wrong: shown under the field and in "Check my PDS", never blocking a save.
 const digits = (v) => String(v || '').replace(/\D/g, '');
 const ID_DIGITS = {
   philhealth: [[12], 'A PhilHealth number has 12 digits.'],
@@ -336,11 +399,34 @@ const ID_DIGITS = {
   psn: [[16], 'A PhilSys Card Number has 16 digits.'],
   tin: [[9, 12, 14], 'A TIN has 9 digits, plus a 3- or 5-digit branch code if any.'],
 };
+// ---- Checks across work experience entries -------------------------------------------------------------------------
+// A position still marked Present after a later one started has usually ended (a promotion or a new job), and a
+// position that ends on or after the next one's start date overlaps it. Concurrent jobs exist, so these are notes.
+const isoToday = () => new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+const dayBefore = (iso) => { const d = new Date(`${iso}T00:00:00Z`); d.setUTCDate(d.getUTCDate() - 1); return d.toISOString().slice(0, 10); };
+const posName = (r) => (filled(r.position) && !isNA(r.position) ? `"${r.position}"` : 'a later position');
+function workConflict(rows, row, key) {
+  if (!row || !isIso(row.from)) return null;
+  // A start date in the future is its own mistake (flagged on that entry), so it does not make others look ended.
+  const later = rows.filter((r) => r !== row && isIso(r.from) && r.from > row.from && r.from <= isoToday()).sort((a, b) => a.from.localeCompare(b.from));
+  const next = later[0];
+  if (!next) return null;
+  if (key === 'to' && row.to === 'PRESENT') {
+    return { msg: `Still marked Present, but ${posName(next)} started on ${toDmy(next.from)}. This position probably ended on ${toDmy(dayBefore(next.from))}.`, fix: dayBefore(next.from) };
+  }
+  if (key === 'to' && isIso(row.to) && row.to >= next.from) {
+    return { msg: `Ends on or after the start of ${posName(next)} (${toDmy(next.from)}). If it ended when that one began, the end date is ${toDmy(dayBefore(next.from))}.`, fix: dayBefore(next.from) };
+  }
+  return null;
+}
+
 function check(def, v, ctx = {}) {
   v = String(v ?? '').trim();
   if (!v || isNA(v)) return '';
   const k = ctx.table ? `${ctx.table}.${def.k}` : def.k;
   if (def.t === 'date') {
+    const across = ctx.table === 'work' && ctx.rows ? workConflict(ctx.rows, ctx.row, def.k) : null;
+    if (across) return across.msg;
     if (v === 'PRESENT' && def.present) return '';
     if (!isIso(v)) return 'Use dd/mm/yyyy, for example 15/01/1992.';
     const d = new Date(v), now = new Date();
@@ -350,6 +436,8 @@ function check(def, v, ctx = {}) {
     }
     if (ctx.row && def.k === 'to' && isIso(ctx.row.from) && v < ctx.row.from) return '"To" is earlier than "From".';
     if (d.getFullYear() < 1900) return 'Check the year.';
+    // Validity dates of licenses may lie ahead; the dates of things that happened may not.
+    if (ctx.table && def.k !== 'valid_until' && v > isoToday()) return 'This date is in the future.';
     return '';
   }
   if (ctx.table === 'education' && ['from', 'to', 'year_grad'].includes(def.k)) {
@@ -374,7 +462,7 @@ function check(def, v, ctx = {}) {
     const d = digits(v);
     return (d.length === 11 && d.startsWith('09')) || (d.length === 12 && d.startsWith('639')) ? '' : 'A mobile number has 11 digits, for example 0917 123 4567.';
   }
-  if (k === 'email') return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v) ? '' : 'This does not look like an e-mail address.';
+  if (k === 'email') return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v) ? '' : 'This does not look like an email address.';
   if (k === 'res_zip' || k === 'perm_zip') return /^\d{4}$/.test(v) ? '' : 'A ZIP code has 4 digits.';
   return '';
 }
@@ -411,18 +499,21 @@ function input(def, value, onChange) {
     const file = el('input', { type: 'file', accept: 'image/png,image/jpeg', hidden: true });
     const rm = el('button', { type: 'button', textContent: 'Remove', className: 'btn btn-ghost btn-sm text-error', hidden: !value });
     const up = el('button', { type: 'button', className: 'btn btn-sm', textContent: value ? 'Change' : 'Upload (PNG/JPG)' });
+    const checks = def.k === 'photo' ? el('ul', { className: 'photo-checks' }) : null;
     const set = (v) => {
       img.src = v;
       img.hidden = rm.hidden = !v;
       up.textContent = v ? 'Change' : 'Upload (PNG/JPG)';
       onChange(v);
       refreshPreview();
+      if (checks) photoReport(checks, v);
     };
+    if (checks && value) photoReport(checks, value);
     up.onclick = (e) => { e.preventDefault(); file.click(); };
     rm.onclick = (e) => { e.preventDefault(); set(''); };
     file.onchange = async () => {
       try {
-        const cropped = file.files[0] && (await cropImage(await createImageBitmap(file.files[0]), def.aspect));
+        const cropped = file.files[0] && (await cropImage(await createImageBitmap(file.files[0]), def.aspect, def.k === 'photo'));
         if (cropped) set(encodeImage(cropped, def.clean));
       } catch (err) {
         toast(err.message || 'This image could not be read.', { type: 'error' });
@@ -439,7 +530,8 @@ function input(def, value, onChange) {
     return el('div', { className: 'img-field' }, box, up, draw, rm, file,
       el('small', {}, def.clean
         ? `Crop after choosing the file. White background is removed automatically.${def.k === 'signature' ? ' Or draw it on screen.' : ''}`
-        : 'Crop after choosing the file. The crop box is fixed at 3.5 cm x 4.5 cm (passport size).'));
+        : 'Crop after choosing the file. The crop box is fixed at 3.5 cm x 4.5 cm (passport size).'),
+      checks, def.k === 'signature' ? signatureGuide() : null);
   }
   if (t === 'money') {
     n = el('input', { type: 'text', className: 'input w-full', placeholder: '₱0.00', inputMode: 'decimal', value: toPeso(value) });
@@ -656,12 +748,13 @@ function render() {
     }));
   });
   const fillNA = (sec.fields || []).some((f) => canNA(f) && visible(f)) && el('button', {
-    className: 'btn btn-ghost btn-sm text-primary', title: 'Writes N/A in every empty item of this section that you can type in', onclick: fillEmptyNA,
+    className: 'btn btn-ghost btn-sm text-primary', title: 'Writes N/A in every empty item of this section that you can type in', onclick: () => fillEmptyNA(),
   }, 'Fill empty with N/A');
   $('#form').replaceChildren(
     el('div', { className: 'sec-head' },
       el('div', {}, el('p', { className: 'text-xs font-medium text-base-content/50' }, `Section ${step + 1} of ${S.length}`),
         el('h2', { className: 'text-2xl font-semibold' }, sec.title)),
+      sec.id === 'work' ? el('button', { className: 'btn btn-sm btn-primary btn-soft gap-1.5', title: 'The CS Form No. 212 attachment for your duties and accomplishments', onclick: openWes }, icon(ICON.layers, 'size-4'), 'Work Experience Sheet') : null,
       fillNA),
     ...body, ...(sec.tables || []).map(renderTable));
   syncConditions();
@@ -673,8 +766,8 @@ function render() {
 }
 
 // Writes N/A in this section's empty, shown items that accept typing.
-function fillEmptyNA() {
-  const sec = S[step];
+function fillEmptyNA(i = step) {
+  const sec = S[i];
   const empty = (sec.fields || []).filter((f) => canNA(f) && visible(f) && !filled(state.fields[f.k]));
   if (!empty.length) return toast('Every item you can type in is already answered.');
   const before = clone(state);
@@ -709,13 +802,13 @@ function renderTable(t) {
       const before = clone(state);
       state.tables[t.k] = sorted;
       redraw();
-      toast('Sorted with the most recent first.', { action: () => restore(before) });
+      toast('Sorted, most recent first.', { action: () => restore(before) });
     } }, icon(ICON.sort), 'Sort newest first'));
   }
   let dragFrom = null;
   rows.forEach((row, i) => {
     const grid = el('div', { className: 'fields' });
-    t.c.forEach((c) => grid.append(field(c, row[c.k], (v) => { row[c.k] = v; changed(); }, { table: t.k, row })));
+    t.c.forEach((c) => grid.append(field(c, row[c.k], (v) => { row[c.k] = v; changed(); }, { table: t.k, row, rows })));
     const btn = (d, label, fn, extra = '') => el('button', { type: 'button', className: `btn btn-ghost btn-xs btn-square ${extra}`, title: label, ariaLabel: `${label}, entry ${i + 1}`, onclick: fn }, icon(d, 'size-3.5'));
     const move = (to) => {
       rows.splice(to, 0, rows.splice(i, 1)[0]);
@@ -820,7 +913,8 @@ function go(i, focusKey) {
 
 // Field notes are refreshed when focus leaves a field, for the whole entry so From/To pairs update together.
 function recheck(e) {
-  const scope = e.target.closest?.('.entry') || e.target.closest?.('.f');
+  const entry = e.target.closest?.('.entry');
+  const scope = entry?.parentElement || e.target.closest?.('.f');
   if (!scope) return;
   (scope.matches('.f') ? [scope] : scope.querySelectorAll('.f')).forEach((f) => f._check?.());
 }
@@ -1241,40 +1335,418 @@ async function exportXlsx() {
   }
 }
 
-// Before exporting: empty items and unusual values per section, each with a link to the field.
-function reviewItems() {
+// ---- Work Experience Sheet ------------------------------------------------------------------------------------------
+// The CS Form No. 212 attachment where duties and accomplishments go (the form says "Description of duties should be
+// indicated in the attached Work Experience Sheet"). Its own list: people include only the work relevant to the
+// position, starting from Section V entries, most recent first.
+const WES_FIELDS = [
+  ['position', 'Position', 'text'],
+  ['unit', 'Name of Office/Unit', 'text'],
+  ['supervisor', 'Immediate Supervisor', 'text'],
+  ['agency', 'Name of Agency/Organization and Location', 'text'],
+  ['accomplishments', 'List of Accomplishments and Contributions (if any)', 'area', 'One per line, e.g. Reduced processing time of permits from 5 days to 2 days.'],
+  ['duties', 'Summary of Actual Duties', 'area', 'One per line, e.g. Prepares monthly payroll for 120 employees.'],
+];
+const wesList = () => (state.wes ||= []);
+// "Jan 2019" style for durations, as the sheet's instructions ask (month abbreviated, year in full).
+const monYear = (v) => (v === 'PRESENT' ? 'Present' : isIso(v) ? new Date(`${v}T00:00`).toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) : v || '');
+const wesKey = (e) => `${e.from}|${e.position}`.toLowerCase();
+
+function renderWes() {
+  const list = wesList(), box = $('#wes-list');
+  const work = (state.tables.work || []).filter((r) => filled(r.position) && !isNA(r.position));
+  const used = new Set(list.map(wesKey));
+  const fresh = work.filter((r) => !used.has(wesKey(r)));
+  $('#wes-from').replaceChildren(...(fresh.length ? fresh.map((r) => el('li', {}, el('button', { type: 'button', onclick: () => addWes(r) },
+    el('span', { className: 'min-w-0' }, el('b', { className: 'block truncate' }, r.position), el('small', { className: 'block truncate opacity-60' }, `${monYear(r.from)} – ${monYear(r.to)} · ${r.office || ''}`)))))
+    : [el('li', { className: 'px-3 py-2 text-xs opacity-60' }, work.length ? 'All your positions are already added.' : 'Add positions in Section V first.')]));
+  $('#wes-count').textContent = list.length ? `${list.length} entr${list.length === 1 ? 'y' : 'ies'}` : '';
+  if (!list.length) {
+    box.replaceChildren(el('div', { className: 'wes-empty' }, el('b', {}, 'No entries yet'),
+      el('p', {}, 'Add the positions relevant to the job you are applying for. Your dates, position and office are copied from Section V; then write your duties and accomplishments.')));
+    return;
+  }
+  box.replaceChildren(...list.map((e, i) => {
+    const set = (k) => (v) => { e[k] = v; changed(); };
+    const inp = ([k, label, t, hint]) => {
+      const ctl = t === 'area'
+        ? el('textarea', { className: 'textarea w-full', rows: 4, value: e[k] || '', placeholder: hint || '', oninput: (ev) => set(k)(ev.target.value) })
+        : el('input', { className: 'input w-full', value: e[k] || '', oninput: (ev) => set(k)(ev.target.value) });
+      return el('label', { className: `f${t === 'area' ? ' wes-wide' : ''}` }, el('span', { className: 'f-head' }, el('span', {}, label)), ctl);
+    };
+    const date = (k, label) => el('label', { className: 'f' }, el('span', { className: 'f-head' }, el('span', {}, label)),
+      el('input', { className: 'input w-full', value: e[k] === 'PRESENT' ? 'Present' : isIso(e[k]) ? toDmy(e[k]) : e[k] || '', placeholder: 'dd/mm/yyyy or Present',
+        oninput: (ev) => { const v = ev.target.value.trim(); set(k)(/^present$/i.test(v) ? 'PRESENT' : toIso(v) || v); } }));
+    const btn = (ic, title, fn, cls = '') => el('button', { type: 'button', className: `btn btn-ghost btn-xs btn-square ${cls}`, title, ariaLabel: title, onclick: fn }, icon(ic, 'size-4'));
+    const move = (to) => { list.splice(to, 0, list.splice(i, 1)[0]); changed(); renderWes(); };
+    return el('article', { className: 'wes-entry' },
+      el('div', { className: 'wes-entry-h' }, el('b', {}, `Entry ${i + 1}`), el('span', { className: 'text-xs opacity-60 truncate' }, e.position || ''),
+        el('span', { className: 'ml-auto flex gap-0.5' },
+          btn(ICON.up, 'Move up', () => move(i - 1), i ? '' : 'invisible'),
+          btn(ICON.down, 'Move down', () => move(i + 1), i < list.length - 1 ? '' : 'invisible'),
+          btn(ICON.trash, 'Remove', () => { const before = clone(state); list.splice(i, 1); changed(); renderWes(); toast('Entry removed.', { action: () => { restore(before); renderWes(); } }); }, 'text-error'))),
+      el('div', { className: 'fields' }, date('from', 'From'), date('to', 'To'), ...WES_FIELDS.map(inp)));
+  }));
+}
+function addWes(r) {
+  wesList().push(r
+    ? { from: r.from || '', to: r.to || '', position: r.position || '', unit: '', supervisor: '', agency: r.office || '', accomplishments: '', duties: '' }
+    : { from: '', to: '', position: '', unit: '', supervisor: '', agency: '', accomplishments: '', duties: '' });
+  document.activeElement?.blur();
+  changed();
+  renderWes();
+  $('#wes-list').lastElementChild?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+function openWes() {
+  renderWes();
+  $('#dlg-wes').showModal();
+  checkWesFormats();
+}
+
+$('#wes-add').onclick = () => addWes(null);
+// The official CSC template filled in on the server (wes.php), as PDF (converted from that Word file, so it matches)
+// or as the Word file itself. Nothing is stored there.
+async function downloadWes(format) {
+  const list = wesList();
+  if (!list.length) return toast('Add at least one entry first.');
+  const f = state.fields;
+  const name = [f.first_name, f.middle_name && !isNA(f.middle_name) ? `${f.middle_name[0]}.` : '', f.surname, f.name_ext && !isNA(f.name_ext) ? f.name_ext : ''].filter(Boolean).join(' ');
+  const d = isIso(f.date_accomplished) ? f.date_accomplished : todayIso();
+  const date = new Date(`${d}T00:00`).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+  const btn = $(format === 'pdf' ? '#wes-pdf' : '#wes-docx');
+  btn.disabled = true;
+  btn.classList.add('loading');
+  try {
+    const res = await fetch('wes.php', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ entries: list, name, date, file: fileName(), format }) });
+    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'The Work Experience Sheet could not be made.');
+    const a = el('a', { href: URL.createObjectURL(await res.blob()), download: `${fileName()} - Work Experience Sheet.${format}` });
+    document.body.append(a);
+    a.click();
+    setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+    track('export_wes');
+  } catch (e) {
+    toast(e.message, { type: 'error', ms: 9000 });
+  } finally {
+    btn.disabled = false;
+    btn.classList.remove('loading');
+  }
+}
+$('#wes-pdf').onclick = () => downloadWes('pdf');
+$('#wes-docx').onclick = () => downloadWes('docx');
+// PDF needs LibreOffice on the server; where it is missing, the PDF button says so and Word remains.
+let wesFormats = null;
+async function checkWesFormats() {
+  wesFormats ||= fetch('wes.php?formats').then((r) => r.json()).catch(() => ({ pdf: false }));
+  const { pdf } = await wesFormats;
+  $('#wes-pdf').disabled = !pdf;
+  $('#wes-pdf').title = pdf ? 'The official CSC template, filled in, as a PDF' : 'PDF is not available on this server. Download the Word file and save it as PDF from Word.';
+}
+$('#exp-wes').onclick = () => { $('#dlg-export').close(); openWes(); };
+
+// ---- Merge PDFs ------------------------------------------------------------------------------------------------------
+// Combines the PDS, the Work Experience Sheet and supporting documents into one PDF for submission. Everything happens
+// in the browser with pdf-lib (loaded only when needed); the files are never sent anywhere.
+let mergeFiles = [];
+let pdfLibReady = null;
+const loadPdfLib = () => (pdfLibReady ||= new Promise((resolve, reject) => {
+  if (window.PDFLib) return resolve(window.PDFLib);
+  const s = el('script', { src: 'vendor/pdf-lib-1.17.1/pdf-lib.min.js' });
+  s.onload = () => resolve(window.PDFLib);
+  s.onerror = () => { pdfLibReady = null; reject(new Error('The PDF tool could not be loaded. Check your connection and try again.')); };
+  document.head.append(s);
+}));
+const fileSize = (n) => (n < 1048576 ? `${Math.max(1, Math.round(n / 1024))} KB` : `${(n / 1048576).toFixed(1)} MB`);
+const MERGE_MAX = 60 * 1048576;
+
+async function addMergeFiles(list) {
+  const files = [...list].filter((f) => /pdf|png|jpe?g/i.test(f.type) || /\.(pdf|png|jpe?g)$/i.test(f.name));
+  if (files.length < list.length) toast('Only PDF, JPG and PNG files can be merged.', { type: 'warning' });
+  if (!files.length) return;
+  let lib;
+  try {
+    lib = await loadPdfLib();
+  } catch (e) {
+    return toast(e.message, { type: 'error' });
+  }
+  for (const f of files) {
+    if (mergeFiles.reduce((a, x) => a + x.size, 0) + f.size > MERGE_MAX) {
+      toast(`${f.name} was not added: the files together can be at most 60 MB.`, { type: 'warning' });
+      continue;
+    }
+    const bytes = new Uint8Array(await f.arrayBuffer());
+    const isPdf = f.type === 'application/pdf' || /\.pdf$/i.test(f.name);
+    let pages = 1;
+    if (isPdf) {
+      try {
+        const doc = await lib.PDFDocument.load(bytes);
+        pages = doc.getPageCount();
+      } catch (e) {
+        toast(/encrypt/i.test(String(e?.message)) ? `${f.name} is password-protected. Remove the password, then add it again.` : `${f.name} could not be read as a PDF.`, { type: 'error', ms: 8000 });
+        continue;
+      }
+    }
+    mergeFiles.push({ id: Math.random().toString(36).slice(2), name: f.name, size: f.size, type: isPdf ? 'pdf' : /png$/i.test(f.type) || /\.png$/i.test(f.name) ? 'png' : 'jpg', bytes, pages });
+  }
+  renderMerge();
+}
+
+function renderMerge() {
+  const list = $('#merge-list');
+  const total = mergeFiles.reduce((a, x) => a + x.pages, 0);
+  $('#merge-empty').hidden = mergeFiles.length > 0;
+  $('#merge-count').textContent = mergeFiles.length ? `${mergeFiles.length} file${mergeFiles.length > 1 ? 's' : ''} · ${total} page${total > 1 ? 's' : ''}` : '';
+  $('#merge-go').disabled = !mergeFiles.length;
+  const btn = (ic, title, fn, cls = '') => el('button', { type: 'button', className: `btn btn-ghost btn-xs btn-square ${cls}`, title, ariaLabel: title, onclick: fn }, icon(ic, 'size-4'));
+  const move = (i, to) => { mergeFiles.splice(to, 0, mergeFiles.splice(i, 1)[0]); renderMerge(); };
+  list.replaceChildren(...mergeFiles.map((f, i) => {
+    const li = el('li', { className: 'merge-item', draggable: true },
+      el('span', { className: 'merge-no' }, String(i + 1)),
+      el('span', { className: `merge-type ${f.type}` }, f.type.toUpperCase()),
+      el('span', { className: 'min-w-0 flex-1' }, el('b', { className: 'block truncate' }, f.name), el('small', {}, `${f.pages} page${f.pages > 1 ? 's' : ''} · ${fileSize(f.size)}`)),
+      el('span', { className: 'flex gap-0.5' },
+        btn(ICON.up, 'Move up', () => move(i, i - 1), i ? '' : 'invisible'),
+        btn(ICON.down, 'Move down', () => move(i, i + 1), i < mergeFiles.length - 1 ? '' : 'invisible'),
+        btn(ICON.trash, 'Remove', () => { mergeFiles.splice(i, 1); renderMerge(); }, 'text-error')));
+    // Drag to reorder.
+    li.ondragstart = (e) => { e.dataTransfer.setData('text/x-merge', String(i)); li.classList.add('dragging'); };
+    li.ondragend = () => li.classList.remove('dragging');
+    li.ondragover = (e) => { if (e.dataTransfer.types.includes('text/x-merge')) { e.preventDefault(); li.classList.add('over'); } };
+    li.ondragleave = () => li.classList.remove('over');
+    li.ondrop = (e) => {
+      const from = Number(e.dataTransfer.getData('text/x-merge'));
+      if (Number.isNaN(from) || !e.dataTransfer.types.includes('text/x-merge')) return;
+      e.preventDefault();
+      e.stopPropagation();
+      move(from, i);
+    };
+    return li;
+  }));
+}
+
+async function mergeAndDownload() {
+  if (!mergeFiles.length) return;
+  const btn = $('#merge-go');
+  btn.disabled = true;
+  btn.classList.add('loading');
+  try {
+    const lib = await loadPdfLib();
+    const out = await lib.PDFDocument.create();
+    const A4 = [595.28, 841.89], M = 28;
+    for (const f of mergeFiles) {
+      if (f.type === 'pdf') {
+        const src = await lib.PDFDocument.load(f.bytes);
+        (await out.copyPages(src, src.getPageIndices())).forEach((p) => out.addPage(p));
+      } else {
+        // A picture (a scanned certificate, a photo of a document) on an A4 page, as large as fits, centered;
+        // landscape pictures get a landscape page.
+        const img = f.type === 'png' ? await out.embedPng(f.bytes) : await out.embedJpg(f.bytes);
+        const [w, h] = img.width > img.height ? [A4[1], A4[0]] : A4;
+        const s = Math.min((w - 2 * M) / img.width, (h - 2 * M) / img.height);
+        const page = out.addPage([w, h]);
+        page.drawImage(img, { x: (w - img.width * s) / 2, y: (h - img.height * s) / 2, width: img.width * s, height: img.height * s });
+      }
+    }
+    const name = `${fileName()} - documents`;
+    out.setTitle(name);
+    out.setProducer('PDSync');
+    out.setCreator('PDSync');
+    const blob = new Blob([await out.save()], { type: 'application/pdf' });
+    const a = el('a', { href: URL.createObjectURL(blob), download: `${name}.pdf` });
+    document.body.append(a);
+    a.click();
+    setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+    toast(`Merged ${mergeFiles.length} files into one PDF (${fileSize(blob.size)}).`, { type: 'success' });
+    track('merge_pdf');
+  } catch (e) {
+    toast(`The files could not be merged: ${e.message}`, { type: 'error', ms: 9000 });
+  } finally {
+    btn.disabled = !mergeFiles.length;
+    btn.classList.remove('loading');
+  }
+}
+
+function openMerge() {
+  renderMerge();
+  $('#dlg-merge').showModal();
+  loadPdfLib().catch(() => {});
+}
+$('#merge-input').onchange = (e) => { addMergeFiles(e.target.files); e.target.value = ''; };
+$('#merge-go').onclick = mergeAndDownload;
+{
+  const zone = $('#merge-drop');
+  zone.ondragover = (e) => { if (e.dataTransfer.types.includes('Files')) { e.preventDefault(); zone.classList.add('drop'); } };
+  zone.ondragleave = (e) => { if (!zone.contains(e.relatedTarget)) zone.classList.remove('drop'); };
+  zone.ondrop = (e) => {
+    zone.classList.remove('drop');
+    if (!e.dataTransfer.files.length) return;
+    e.preventDefault();
+    addMergeFiles(e.dataTransfer.files);
+  };
+}
+$('#exp-merge').onclick = () => { $('#dlg-export').close(); openMerge(); };
+
+// ---- Ready to submit ------------------------------------------------------------------------------------------------
+// The things HR usually sends a PDS back for, in three levels: must fix (empty or malformed), worth a look (order,
+// incomplete entries, references, photo, an old date), and good to know. Each item can jump to its place, and some
+// can be fixed in one click.
+const TABLE_KEYS = {
+  education: ['level', 'school'],
+  eligibility: ['name'],
+  work: ['from', 'to', 'position', 'office'],
+  learning: ['title', 'from', 'to', 'hours'],
+  voluntary: ['org', 'from', 'to'],
+  references: ['name', 'address', 'tel'],
+  children: ['name', 'dob'],
+};
+const todayIso = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
+const listNames = (a, n = 3) => a.slice(0, n).join(', ') + (a.length > n ? ` and ${a.length - n} more` : '');
+
+function readiness() {
   const out = [];
+  const add = (level, i, title, hint, extra = {}) => out.push({ level, i, title, hint, ...extra });
   S.forEach((sec, i) => {
+    const name = TAB[sec.id] || sec.title;
     const info = sectionInfo(sec);
-    const empty = info.missing.length + info.emptyTables.length;
-    if (empty) out.push({ i, k: info.missing[0]?.k, text: `${TAB[sec.id]}: ${empty} empty item${empty > 1 ? 's' : ''}`, hint: 'Answer them or write N/A.' });
+    if (info.missing.length) {
+      const yn = info.missing.filter((f) => f.t === 'yn');
+      const rest = info.missing.filter((f) => f.t !== 'yn');
+      if (yn.length) add('fix', i, `${name}: ${yn.length} question${yn.length > 1 ? 's' : ''} not answered`, 'Every question needs Yes or No.', { k: yn[0].k });
+      if (rest.length) {
+        const na = rest.filter(canNA);
+        add('fix', i, `${name}: ${rest.length} empty item${rest.length > 1 ? 's' : ''}`, `${listNames(rest.map((f) => f.l))}. Answer them, or write N/A if they do not apply.`,
+          { k: rest[0].k, act: na.length ? { label: 'Write N/A', fn: () => fillEmptyNA(i) } : null });
+      }
+    }
+    info.emptyTables.forEach((t) => add('fix', i, `${name}: ${t.l.replace(/\s*\(.*\)/, '')} is empty`, `Add your ${t.l.replace(/\s*\(.*\)/, '').toLowerCase()}, or one entry with N/A if you have none.`));
     (sec.fields || []).filter(visible).forEach((f) => {
       const m = check(f, state.fields[f.k]);
-      if (m) out.push({ i, k: f.k, text: `${TAB[sec.id]}: ${f.l}`, hint: m });
+      if (m) add('fix', i, `${name}: ${f.l}`, m, { k: f.k });
     });
-    (sec.tables || []).forEach((t) => (state.tables[t.k] || []).forEach((row, r) => t.c.forEach((c) => {
-      const m = check(c, row[c.k], { table: t.k, row });
-      if (m) out.push({ i, text: `${TAB[sec.id]}: entry ${r + 1}, ${c.l}`, hint: m });
-    })));
+    (sec.tables || []).forEach((t) => {
+      const rows = state.tables[t.k] || [];
+      rows.forEach((row, r) => t.c.forEach((c) => {
+        // Work entries that overlap the next one: a stale "Present" must be fixed, a short overlap is worth a look.
+        const across = t.k === 'work' && c.k === 'to' ? workConflict(rows, row, 'to') : null;
+        if (across) {
+          return add(row.to === 'PRESENT' ? 'fix' : 'check', i, `${name}: entry ${r + 1}${filled(row.position) ? ` (${row.position})` : ''}, ${c.l}`, across.msg,
+            { act: { label: `End on ${toDmy(across.fix)}`, fn: () => setCell(t.k, row, 'to', across.fix) } });
+        }
+        const m = check(c, row[c.k], { table: t.k, row, rows });
+        if (m) add('fix', i, `${name}: entry ${r + 1}, ${c.l}`, m);
+      }));
+      // Entries that are started but miss the details the form needs; an all-N/A entry is fine.
+      const need = TABLE_KEYS[t.k] || [];
+      rows.forEach((row, r) => {
+        if (!rowFilled(row) || Object.values(row).filter(filled).every(isNA)) return;
+        const blank = need.filter((k) => !filled(row[k])).map((k) => t.c.find((c) => c.k === k)?.l || k);
+        if (blank.length) add('check', i, `${name}: entry ${r + 1} is incomplete`, `${listNames(blank)} ${blank.length > 1 ? 'are' : 'is'} blank.`);
+      });
+      if (sortable(t)) {
+        const real = rows.filter((r) => newest(r));
+        if (real.some((r, j) => j && newest(r) > newest(real[j - 1]))) {
+          add('check', i, `${name}: not in order`, 'The form lists the most recent first.', { act: { label: 'Sort newest first', fn: () => sortNewest(t) } });
+        }
+      }
+    });
   });
+  const ri = S.findIndex((sec) => (sec.tables || []).some((t) => t.k === 'references'));
+  if (ri >= 0) {
+    const n = (state.tables.references || []).filter((r) => filled(r.name) && !isNA(r.name)).length;
+    if (n && n < 3) add('check', ri, `References: ${n} of 3`, 'The form asks for three people who are not your relatives.');
+  }
+  const pi = S.findIndex((sec) => (sec.fields || []).some((f) => f.k === 'photo'));
+  if (pi >= 0) {
+    if (!filled(state.fields.photo)) add('check', pi, 'No ID photo', 'Add a passport-size photo taken within the last 6 months, or paste a printed one on the form.', { k: 'photo' });
+    const d = state.fields.date_accomplished;
+    if (isIso(d)) {
+      const days = Math.round((new Date(todayIso()) - new Date(d)) / 86400000);
+      if (days > 30) add('check', pi, `Date accomplished is ${days} days ago`, 'Use the date you will sign and submit the form.', { k: 'date_accomplished', act: { label: 'Use today', fn: () => setField('date_accomplished', todayIso()) } });
+    }
+    const hand = [!filled(state.fields.signature) && 'signature', !filled(state.fields.thumbmark) && 'right thumbmark'].filter(Boolean);
+    if (hand.length) add('tip', pi, `No e-${hand.join(' or ')}`, `That is fine: put your ${hand.join(' and ')} on the printout by hand.`, { k: hand[0] === 'signature' ? 'signature' : 'thumbmark' });
+  }
   return out;
 }
+
+function setField(k, v) {
+  const before = clone(state);
+  state.fields[k] = v;
+  changed();
+  render();
+  toast('Updated.', { action: () => restore(before) });
+}
+// Sets one value of a table entry (a one-click fix), with Undo.
+function setCell(table, row, key, value) {
+  const before = clone(state);
+  row[key] = value;
+  changed();
+  render();
+  toast('Updated.', { action: () => restore(before) });
+}
+function sortNewest(t) {
+  const before = clone(state);
+  const rows = state.tables[t.k] || [];
+  state.tables[t.k] = [...rows].sort((a, b) => newest(b).localeCompare(newest(a)));
+  changed();
+  render();
+  toast('Sorted, most recent first.', { action: () => restore(before) });
+}
+
+const LEVELS = { fix: ['Must fix', 'bad'], check: ['Worth a look', 'warn'], tip: ['Good to know', 'muted'] };
+function readinessSummary(items = readiness()) {
+  const n = { fix: 0, check: 0, tip: 0 };
+  items.forEach((it) => n[it.level]++);
+  const infos = S.map(sectionInfo);
+  const all = infos.reduce((a, x) => [a[0] + x.done, a[1] + x.total], [0, 0]);
+  const pct = Math.round((100 * all[0]) / (all[1] || 1));
+  const title = n.fix ? (n.fix <= 3 ? 'Almost ready' : 'Keep going') : n.check ? 'Nearly there' : 'Ready to submit';
+  const sub = n.fix || n.check ? [n.fix && `${n.fix} to fix`, n.check && `${n.check} to check`].filter(Boolean).join(' · ') : 'Nothing HR would send back.';
+  return { n, pct, title, sub, tone: n.fix ? 'bad' : n.check ? 'warn' : 'ok' };
+}
+const ring = (pct, tone) => el('span', { className: `ready-ring ${tone}`, style: `--p:${pct}`, ariaHidden: 'true' }, el('b', {}, `${pct}%`));
+
+function renderCheck() {
+  const items = readiness(), sum = readinessSummary(items);
+  $('#chk-head').replaceChildren(ring(sum.pct, sum.tone), el('div', { className: 'min-w-0' }, el('h3', { className: 'title-serif text-2xl' }, sum.title), el('p', { className: 'text-sm text-base-content/65' }, sum.sub)));
+  const body = $('#chk-body');
+  if (!sum.n.fix && !sum.n.check && !sum.n.tip) {
+    body.replaceChildren(el('div', { className: 'chk-done' }, el('span', { className: 'chk-done-ico' }, icon(ICON.check, 'size-6')),
+      el('b', {}, 'Everything looks complete'), el('p', {}, 'Every item is answered, entries are in order and nothing looks unusual. Export it and sign the printout.')));
+    return;
+  }
+  body.replaceChildren(...Object.entries(LEVELS).filter(([lv]) => sum.n[lv]).map(([lv, [label, tone]]) => el('section', { className: 'chk-group' },
+    el('h4', {}, el('span', { className: `chip ${tone}` }, label), el('small', {}, String(sum.n[lv]))),
+    el('ul', {}, ...items.filter((it) => it.level === lv).map((it) => el('li', { className: 'chk-item' },
+      el('div', { className: 'min-w-0 flex-1' }, el('b', {}, it.title), el('p', {}, it.hint)),
+      el('div', { className: 'chk-acts' },
+        it.act ? el('button', { className: 'btn btn-xs btn-primary btn-soft', onclick: () => { it.act.fn(); renderCheck(); } }, it.act.label) : null,
+        el('button', { className: 'btn btn-xs btn-ghost', onclick: () => { $('#dlg-check').close(); go(it.i, it.k); } }, 'Go', icon(ICON.down, 'size-3 -rotate-90')))))))));
+}
+function openCheck() {
+  renderCheck();
+  $('#dlg-check').showModal();
+}
+
 function openExport() {
   $('#dlg-name').textContent = fileName();
-  const items = reviewItems(), box = $('#review');
-  if (!items.length) {
-    box.replaceChildren(el('div', { className: 'alert alert-success alert-soft text-sm' }, 'Every item is answered and nothing looks unusual.'));
-  } else {
-    const list = el('ul', { className: 'grid gap-1' }, ...items.slice(0, 8).map((it) => el('li', {},
-      el('button', { className: 'review-item', onclick: () => { $('#dlg-export').close(); go(it.i, it.k); } },
-        el('span', {}, el('b', {}, it.text), el('small', {}, it.hint)), el('span', { className: 'text-primary' }, 'Go →')))));
-    if (items.length > 8) list.append(el('li', { className: 'px-2 text-xs text-base-content/60' }, `and ${items.length - 8} more`));
-    box.replaceChildren(el('p', { className: 'mb-2 text-sm font-medium' }, 'Before you export, please check:'), list,
-      el('p', { className: 'mt-2 text-xs text-base-content/60' }, 'You can still export now and fix these later.'));
-  }
-  if (!filled(state.fields.signature)) box.append(el('p', { className: 'mt-2 text-xs text-base-content/60' }, 'No e-signature added. You can sign the printout by hand.'));
+  const sum = readinessSummary();
+  $('#review').replaceChildren(el('button', { className: `ready-card ${sum.tone}`, onclick: () => { $('#dlg-export').close(); openCheck(); } },
+    ring(sum.pct, sum.tone),
+    el('span', { className: 'min-w-0 flex-1 text-left' }, el('b', {}, sum.title), el('small', {}, sum.n.fix || sum.n.check ? `${sum.sub}. You can still export now and fix these later.` : 'Every item is answered and nothing looks unusual.')),
+    el('span', { className: 'text-xs font-semibold text-primary whitespace-nowrap' }, sum.n.fix || sum.n.check ? 'Review' : 'Details')));
+  $('#oath-ok').checked = false;
+  syncOath();
   $('#dlg-export').showModal();
 }
+// The form's own declaration must be read before exporting (CSC: the PDS is accomplished and signed under oath).
+function syncOath() {
+  const ok = $('#oath-ok').checked;
+  document.querySelectorAll('#exp-choices .choice').forEach((b) => (b.disabled = !ok));
+  $('#exp-choices').classList.toggle('locked', !ok);
+}
+$('#oath-ok').onchange = syncOath;
+$('#btn-check')?.addEventListener('click', openCheck);
+$('#chk-export').onclick = () => { $('#dlg-check').close(); openExport(); };
 
 $('#btn-export-open').onclick = openExport;
 $('#exp-pdf').onclick = () => { $('#dlg-export').close(); openPrint(); };
@@ -1284,6 +1756,33 @@ $('#dlg-print').addEventListener('close', () => {
   $('#dlg-print').returnValue = '';
 });
 $('#exp-xlsx').onclick = () => { $('#dlg-export').close(); exportXlsx(); };
+
+// ---- Consent (Data Privacy Act) --------------------------------------------------------------------------------------
+// Nothing is saved on the server until the person agrees to the current privacy notice (window.CONSENT). Without it
+// the PDS stays in this browser only; the save status says so and opens this dialog again when clicked.
+const consented = () => store.get('pds-consent') === window.CONSENT;
+function askConsent() {
+  const dlg = $('#dlg-consent');
+  if (dlg.open) return Promise.resolve();
+  $('#consent-ok').checked = false;
+  $('#consent-yes').disabled = true;
+  dlg.showModal();
+  return new Promise((done) => dlg.addEventListener('close', done, { once: true }));
+}
+$('#consent-ok').onchange = (e) => ($('#consent-yes').disabled = !e.target.checked);
+$('#consent-yes').onclick = () => {
+  store.set('pds-consent', window.CONSENT);
+  $('#dlg-consent').close();
+  toast('Thank you. Your PDS is now saved securely online.');
+  if (hasAnswers()) autoSave(true);
+};
+$('#consent-no').onclick = () => {
+  $('#dlg-consent').close();
+  setSave('local');
+  toast('Your PDS stays on this device only. Click the save status any time to save it online.', { ms: 7000 });
+};
+// Escape counts as "Not now".
+$('#dlg-consent').addEventListener('cancel', () => setSave('local'));
 
 // ---- Saving --------------------------------------------------------------------------------------------------------
 // Every change is kept in this browser at once and sent to the server shortly after. Unchanged images are sent as "="
@@ -1312,6 +1811,7 @@ let conflict = false;
 let errorShown = false;
 async function autoSave(force = false) {
   if (conflict) return;
+  if (!consented()) return setSave('local');
   if (saving) return (again = true);
   saving = true;
   setSave('saving');
@@ -1340,7 +1840,7 @@ async function autoSave(force = false) {
 }
 addEventListener('online', () => autoSave());
 addEventListener('offline', () => setSave('offline'));
-$('#save-pill').onclick = () => autoSave();
+$('#save-pill').onclick = () => (consented() ? autoSave() : askConsent());
 
 addEventListener('beforeunload', (e) => {
   if (timer || saving) e.preventDefault();
@@ -1357,14 +1857,20 @@ async function save(force = false) {
     // Signed-in users save by id (ownership); anonymous saves go to this browser's cookie PDS.
     body: JSON.stringify({
       ...(window.USER && auth.id ? { id: auth.id } : {}),
-      data: { fields, tables: state.tables },
+      data: { fields, tables: state.tables, wes: state.wes || [] },
       name: $('#inp-name').value,
       ...(auth.updated ? { base: auth.updated } : {}),
       ...(force ? { force: true } : {}),
+      consent: window.CONSENT,
     }),
   });
   const out = await res.json().catch(() => ({}));
   if (res.status === 409) throw Object.assign(new Error(out.error), { conflict: true });
+  if (res.status === 428) {
+    store.set('pds-consent', '');
+    askConsent();
+    throw new Error('Agree to the privacy notice to save online');
+  }
   if (!res.ok) throw new Error(out.error || 'Save failed');
   const was = auth.id;
   auth = { id: out.id, updated: out.updated };
@@ -1583,7 +2089,7 @@ $('#inp-backup').onchange = async (e) => {
   } catch {
     return toast('This is not a PDSync copy (.json).', { type: 'error' });
   }
-  if (hasAnswers() && await ask({ title: 'Open this copy?', body: `It replaces your current answers with the copy saved ${copy.saved ? new Date(copy.saved).toLocaleString() : 'earlier'}.`, buttons: [{ label: 'Cancel', value: '' }, { label: 'Open copy', value: 'ok', cls: 'btn-primary' }] }) !== 'ok') return;
+  if (hasAnswers() && await ask({ title: 'Open this copy?', body: `It replaces your current answers with the copy saved ${copy.saved ? new Date(copy.saved).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }) : 'earlier'}.`, buttons: [{ label: 'Cancel', value: '' }, { label: 'Open copy', value: 'ok', cls: 'btn-primary' }] }) !== 'ok') return;
   const before = clone(state);
   state = copy.data;
   if (copy.name) $('#inp-name').value = copy.name;
@@ -1595,13 +2101,13 @@ $('#inp-backup').onchange = async (e) => {
 async function showVersions() {
   if (!auth.id) return toast('Nothing is saved yet, so there are no earlier versions.');
   const q = window.USER ? `&id=${encodeURIComponent(auth.id)}` : '';
-  let list = [];
+  let list;
   try {
     list = (await (await fetch(`api.php?versions${q}`)).json()).versions || [];
   } catch {
     return toast('Version history needs a connection.', { type: 'warning' });
   }
-  const when = (t) => new Date(t * 1000).toLocaleString();
+  const when = (t) => new Date(t * 1000).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' });
   $('#versions-list').replaceChildren(...list.map((v) => el('li', {},
     el('div', {}, el('strong', {}, when(v.saved))),
     el('button', { className: 'btn btn-sm', onclick: async () => {
@@ -1633,6 +2139,8 @@ const MENU = {
   new: askNew,
   help: () => $('#dlg-help').showModal(),
   versions: showVersions,
+  wes: () => openWes(),
+  merge: () => openMerge(),
   backup: downloadCopy,
   delete: askDelete,
   'rename-file': async () => {
@@ -1683,7 +2191,11 @@ if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.
 }
 
 setPreview(wide.matches && store.get('pds-preview') !== 'hidden', false);
-load().then(() => {
+load().then(async () => {
+  if (!consented()) {
+    await askConsent();
+    if (!consented()) setSave('local');
+  }
   if (!store.get('pds-welcomed')) {
     $('#dlg-welcome').addEventListener('close', () => store.set('pds-welcomed', '1'), { once: true });
     $('#dlg-welcome').showModal();

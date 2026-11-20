@@ -99,21 +99,22 @@ function xlsx_cell(array &$b, string $sheet, string $ref, bool $create): ?DOMEle
 {
     $xp = xlsx_xpath($b, $sheet);
     $c = $xp->query("//x:sheetData/x:row/x:c[@r='$ref']")->item(0);
-    if ($c || !$create) return $c;
+    if ($c instanceof DOMElement) return $c;
+    if (!$create) return null;
     $doc = $xp->document;
     $r = (int)preg_replace('/\D/', '', $ref);
     $row = $xp->query("//x:sheetData/x:row[@r='$r']")->item(0);
-    if (!$row) {
+    if (!$row instanceof DOMElement) {
         $row = $doc->createElementNS(XLSX_NS, 'row');
         $row->setAttribute('r', (string)$r);
         $next = null;
-        foreach ($xp->query('//x:sheetData/x:row') as $e) if ((int)$e->getAttribute('r') > $r && !$next) $next = $e;
+        foreach ($xp->query('//x:sheetData/x:row') as $e) if ($e instanceof DOMElement && (int)$e->getAttribute('r') > $r && !$next) $next = $e;
         $xp->query('//x:sheetData')->item(0)->insertBefore($row, $next);
     }
     $c = $doc->createElementNS(XLSX_NS, 'c');
     $c->setAttribute('r', $ref);
     $next = null;
-    foreach ($xp->query('x:c', $row) as $e) if (xlsx_col($e->getAttribute('r')) > xlsx_col($ref) && !$next) $next = $e;
+    foreach ($xp->query('x:c', $row) as $e) if ($e instanceof DOMElement && xlsx_col($e->getAttribute('r')) > xlsx_col($ref) && !$next) $next = $e;
     $row->insertBefore($c, $next);
     return $c;
 }
@@ -123,11 +124,11 @@ function xlsx_merge_row(array &$b, string $sheet, int $src, int $dst): void
 {
     $xp = xlsx_xpath($b, $sheet);
     $mc = $xp->query('//x:mergeCells')->item(0);
-    if (!$mc || $src === $dst) return;
+    if (!$mc instanceof DOMElement || $src === $dst) return;
     $refs = array_map(fn($m) => $m->getAttribute('ref'), iterator_to_array($xp->query('x:mergeCell', $mc)));
     if (preg_grep("/^[A-Z]+$dst:/", $refs)) return;
     foreach (preg_grep("/^[A-Z]+$src:[A-Z]+$src$/", $refs) as $ref) {
-        $mc->appendChild($xp->document->createElementNS(XLSX_NS, 'mergeCell'))->setAttribute('ref', str_replace($src, $dst, $ref));
+        $mc->appendChild($xp->document->createElementNS(XLSX_NS, 'mergeCell'))->setAttribute('ref', str_replace((string)$src, (string)$dst, $ref));
     }
     $mc->setAttribute('count', (string)$xp->query('x:mergeCell', $mc)->length);
 }
@@ -148,7 +149,8 @@ function xlsx_align_like(array &$b, string $sheet, string $src, string $dst): vo
         $xp->registerNamespace('x', XLSX_NS);
         $xfs = $xp->query('//x:cellXfs')->item(0);
         $list = $xp->query('x:xf', $xfs);
-        $copy = $list->item($to)->cloneNode(true);
+        $copy = $list->item($to)?->cloneNode(true);
+        if (!$xfs instanceof DOMElement || !$copy instanceof DOMElement) return;
         foreach (iterator_to_array($xp->query('x:alignment', $copy)) as $a) $copy->removeChild($a);
         if ($align = $xp->query('x:alignment', $list->item($from))->item(0)) {
             $copy->insertBefore($align->cloneNode(true), $copy->firstChild);
@@ -184,7 +186,7 @@ function xlsx_get(array &$b, string $sheet, string $ref): string
     if (!$c) return '';
     $t = $c->getAttribute('t');
     if ($t === 'inlineStr') return trim($c->textContent);
-    $v = $c->getElementsByTagName('v')->item(0)?->textContent ?? '';
+    $v = $c->getElementsByTagName('v')->item(0)->textContent ?? '';
     return trim($t === 's' ? (xlsx_shared($b)[(int)$v] ?? '') : $v);
 }
 

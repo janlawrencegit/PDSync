@@ -37,7 +37,7 @@ $I = [
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>My PDS - PDSync</title>
 <meta name="theme-color" content="#1e3a8a">
-<script>try { const t = localStorage.getItem('pds-theme'); if (t) document.documentElement.dataset.theme = t; } catch {}</script>
+<script nonce="<?= csp_nonce() ?>">try { const t = localStorage.getItem('pds-theme'); if (t) document.documentElement.dataset.theme = t; } catch {}</script>
 <link rel="preload" href="fonts/geist-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="fonts/instrument-serif-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="app.css?v=<?= $v('app.css') ?>">
@@ -60,7 +60,10 @@ $I = [
         <li class="menu-head"><div class="acct-head"><span class="acct-ava"><?= h(strtoupper(substr($user['name'] ?: $user['email'], 0, 1))) ?></span><span class="min-w-0"><b class="block truncate"><?= h($user['name'] ?: 'Your account') ?></b><small class="block truncate"><?= h($user['email']) ?></small></span></div></li>
         <?php if (in_array(strtolower($user['email']), admin_emails(), true)): ?><li><a href="admin.php"><?= $icon('<path d="M3 3v18h18"/><path d="M7 15l4-4 3 3 5-6"/>') ?>Admin dashboard</a></li><?php endif; ?>
         <li><a href="privacy.php"><?= $icon($I['shield']) ?>Privacy notice</a></li>
-        <li><button type="submit" form="form-logout"><?= $icon($I['logout']) ?>Sign out</button></li>
+        <li class="menu-title">Your data</li>
+        <li><a href="account.php?export" download><?= $icon('<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/><path d="M12 15V3"/>') ?>Download all my data</a></li>
+        <li><button type="button" data-acct="delete" class="text-error"><?= $icon('<path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>') ?>Delete my account</button></li>
+        <li class="mt-1 border-t border-base-300 pt-1"><button type="submit" form="form-logout"><?= $icon($I['logout']) ?>Sign out</button></li>
       </ul>
       <form method="post" action="auth.php?logout" id="form-logout" hidden></form>
     </div>
@@ -151,7 +154,7 @@ $I = [
   </div>
 </dialog>
 
-<script>window.LIB = <?= json_encode(['user' => (bool)$user, 'first' => $user ? explode(' ', trim((string)($user['name'] ?? '')))[0] : '', 'google' => $google, 'thumb' => $thumb, 'sections' => $sections]) ?>;</script>
+<script nonce="<?= csp_nonce() ?>">window.LIB = <?= json_encode(['user' => (bool)$user, 'first' => $user ? explode(' ', trim((string)($user['name'] ?? '')))[0] : '', 'google' => $google, 'thumb' => $thumb, 'sections' => $sections]) ?>;</script>
 <script src="ui.js?v=<?= $v('ui.js') ?>"></script>
 <script src="library.js?v=<?= $v('library.js') ?>"></script>
 </body>

@@ -1,10 +1,10 @@
 // Offline support: keeps the app's files so the page opens without a connection. Answers are never cached here;
 // they stay in the page's own storage until the server can be reached again.
-const CACHE = 'pdsync-v5';
+const CACHE = 'pdsync-v6';
 const SHELL = ['./', 'library.php', 'app.css', 'preview.css', 'ui.js', 'app.js', 'library.js', 'vendor/cally-0.9.2.js', 'fonts/geist-latin-wght-normal.woff2', 'fonts/geist-mono-latin-wght-normal.woff2', 'fonts/instrument-serif-latin-400-normal.woff2', 'fonts/instrument-serif-latin-400-italic.woff2', 'fonts/roboto-condensed-latin-700-normal.woff2', 'icon.svg',
   'manifest.webmanifest', 'psgc/places.json', 'pds/page1.png', 'pds/page2.png', 'pds/page3.png', 'pds/page4.png'];
 // Server endpoints: always live, never served from the cache.
-const LIVE = /\/(api|account|auth|stats|admin|view|xlsx|privacy|forms|form-page)\.php/;
+const LIVE = /\/(api|account|auth|stats|admin|view|xlsx|privacy|forms|form-page|wes)\.php/;
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => Promise.allSettled(SHELL.map((u) => c.add(u)))).then(() => self.skipWaiting()));

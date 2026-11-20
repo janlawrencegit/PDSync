@@ -138,7 +138,11 @@ function pds_overflow(array $d): array
             $seen = [];
             $out[$t] = array_filter($d['tables'][$t] ?? [], function ($row) use (&$seen) {
                 $level = $row['level'] ?? '';
-                if (isset(pds_map()['edu_rows'][$level]) && !isset($seen[$level])) return !($seen[$level] = true);
+                // The first row of each school level is on the form itself; later ones go on the continuation sheet.
+                if (isset(pds_map()['edu_rows'][$level]) && !isset($seen[$level])) {
+                    $seen[$level] = true;
+                    return false;
+                }
                 return true;
             });
         } else {

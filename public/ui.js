@@ -95,3 +95,22 @@ function track(e) {
   try { window.umami?.track(e); } catch {}
   try { window.goatcounter?.count?.({ path: `event/${e}`, title: e, event: true }); } catch {}
 }
+
+// Account menu: erase the account and every PDS in it (Data Privacy Act: right to erasure), after typing DELETE.
+document.addEventListener('click', async (e) => {
+  if (!e.target.closest('[data-acct="delete"]')) return;
+  document.activeElement?.blur();
+  const r = await ask({
+    title: 'Delete your account?',
+    body: ['This erases your account and every PDS in it, including the Trash and earlier versions. It cannot be undone.',
+      'Download your data first if you want a copy. To confirm, type DELETE below.'],
+    input: '',
+    buttons: [{ label: 'Cancel', value: '' }, { label: 'Delete my account', value: 'ok', cls: 'btn-error' }],
+  });
+  if (!r) return;
+  if (r.text.trim() !== 'DELETE') return toast('Not deleted: type DELETE in capital letters to confirm.', { type: 'error' });
+  const res = await fetch('account.php', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ op: 'delete-account', confirm: 'DELETE' }) });
+  if (!res.ok) return toast((await res.json().catch(() => ({}))).error || 'Could not delete the account.', { type: 'error' });
+  try { localStorage.clear(); } catch {}
+  location.href = './';
+});
