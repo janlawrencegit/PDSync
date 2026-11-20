@@ -1,7 +1,14 @@
 Options -Indexes
 DirectoryIndex index.php
 
+# This folder is the web-facing one; the project root's .htaccess denies everything else (lib/, data/, ...).
+Require all granted
+
 RewriteEngine On
+# Every visit goes to HTTPS, except local development (localhost / 127.0.0.1), which has no certificate, and
+# Railway's health check, which calls the container over plain HTTP.
+RewriteCond %{HTTP_HOST} !^(localhost|127\.0\.0\.1)(:\d+)?$
+RewriteCond %{HTTP_HOST} !^healthcheck\.railway\.app$
 RewriteCond %{HTTPS} !=on
 RewriteCond %{HTTP:X-Forwarded-Proto} !=https
 RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]

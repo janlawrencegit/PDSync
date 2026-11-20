@@ -1,0 +1,17 @@
+# Local development: `docker compose up --build`, then open http://localhost:8000.
+# The project folder is mounted, so edits show on reload. MySQL is the pdsync-mysql container set up by
+# tools/setup-local.ps1, reached through the host; config.local.php still holds the database user, password and the
+# Google sign-in keys.
+services:
+  app:
+    build: .
+    ports:
+      - "${PDSYNC_PORT:-8000}:80"
+    volumes:
+      - .:/var/www/app
+    environment:
+      DB_DSN: "mysql:host=host.docker.internal;port=3306;dbname=pdsync;charset=utf8mb4"
+      APP_URL: "http://localhost:${PDSYNC_PORT:-8000}"
+      TIMEZONE: "Asia/Manila"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"

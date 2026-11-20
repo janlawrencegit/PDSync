@@ -2,3 +2,9 @@ data/
 config.local.php
 docs/
 tools/bin/
+
+.playwright-mcp/
+/vendor/
+node_modules/
+.phpunit.cache/
+.env

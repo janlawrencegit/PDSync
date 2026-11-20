@@ -1,6 +1,8 @@
 # PDSync
 
-Fill out the CSC Personal Data Sheet (CS Form 212, Revised 2026) with a live preview of the official form, then export it as PDF or as the official Excel file.
+[![CI](https://github.com/janlawrencegit/PDSync/actions/workflows/ci.yml/badge.svg)](https://github.com/janlawrencegit/PDSync/actions/workflows/ci.yml)
+
+Fill out the CSC Personal Data Sheet (CS Form No. 212, Revised 2026) with a live preview of the official form, then export it as PDF or as the official Excel file.
 
 - **Without an account:** each PC/browser keeps its own PDS (HttpOnly cookie). There are no share links: a PDS is reachable only from that browser, or from the owner's Google account.
 - **Signed in with Google (optional):**
@@ -13,7 +15,11 @@ What helps people fill it out:
 
 - **Guidance:** hints from the official form under each field, an N/A button per field, and **Fill empty with N/A** per section.
 - **Checks:** gentle notes for values that look wrong, such as height in centimeters, a TIN with too few digits, or a "To" date before "From". They never block saving.
-- **Progress:** each section shows a check mark when every item is answered and a half circle when started. Export lists what is still empty, with links to each item.
+- **Progress:** each section shows a check mark when every item is answered and a half circle when started.
+- **Check my PDS:** a readiness score that lists empty items and likely mistakes HR would send back, such as overlapping or future work dates, with a link to each. Export asks the person to confirm the form's declaration first.
+- **Work Experience Sheet:** the separate CSC attachment, filled from the work entries into the official template, as PDF or Word.
+- **Merge PDFs:** joins the PDS, the Work Experience Sheet and supporting documents into one PDF, in the browser.
+- **Photo and signature help:** a crop guide for the passport photo, checks on its size and background, and a guide to which e-signatures are accepted.
 - **Addresses:** province, city and barangay suggestions from the PSA's PSGC list.
 - **Tables:** move entries up or down, drag to reorder, duplicate, sort newest first, mark a part as None (N/A), and choose Present for a current job.
 - **Continuation sheets:** entries beyond the form's rows go on the official sheets C5-C11, in both the Excel file and the PDF.
@@ -27,6 +33,42 @@ What helps people fill it out:
 
 - PHP 8.0 or later, with these extensions: `pdo_mysql`, `curl`, `openssl`, `dom`, `zlib`.
 - MySQL 5.7 or later, or MariaDB 10.2 or later.
+
+## Deploy with Docker (recommended)
+
+Any server with Docker, such as a small VPS. The image has Apache, PHP 8.3 with OPcache, and LibreOffice for the Work Experience Sheet PDF.
+
+```sh
+cp .env.example .env          # fill in APP_URL, DB_PASS, DATA_KEY and, optionally, Google and DPO settings
+docker compose -f compose.prod.yaml up -d --build
+```
+
+- `compose.prod.yaml` runs the app and MySQL 8.4, both restarting on failure, with health checks. The database creates its tables on the first request.
+- The app listens on `127.0.0.1:${APP_PORT}` (default 8080). Put a TLS reverse proxy such as Caddy in front of it, for example `pds.example.com { reverse_proxy 127.0.0.1:8080 }`. The proxy must send `X-Forwarded-Proto`, which Caddy does by default.
+- Everything is set by environment variables, so no `config.local.php` is needed. Environment variables always win over `config.local.php`.
+- People's data lives in two volumes: `db-data` (MySQL) and `app-data` (sign-in sessions, form versions, usage counters). Back up both, and keep `DATA_KEY` somewhere safe.
+- To update, pull the new code and run the same `up -d --build`; the database updates itself.
+
+## Deploy on Railway
+
+`railway.json` tells Railway to build the `Dockerfile` and check `/` before switching traffic. Apache listens on Railway's `PORT`.
+
+1. Create a project from the GitHub repo, then add a **MySQL** database to the same project.
+2. On the app service, add a **volume** mounted at `/var/www/app/data` (sign-in sessions, form versions, usage counters).
+3. Set the app's variables (Railway fills in the `${{MySQL.…}}` references):
+
+   ```
+   APP_URL=https://<your-app>.up.railway.app
+   DB_DSN=mysql:host=${{MySQL.MYSQLHOST}};port=${{MySQL.MYSQLPORT}};dbname=${{MySQL.MYSQLDATABASE}};charset=utf8mb4
+   DB_USER=${{MySQL.MYSQLUSER}}
+   DB_PASS=${{MySQL.MYSQLPASSWORD}}
+   DATA_KEY=<32 random bytes, base64>
+   ```
+
+   Optional: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `ADMIN_EMAILS`, `DPO_NAME`, `DPO_EMAIL`, `CONTACT_EMAIL`.
+4. Under **Networking**, generate a domain. For Google sign-in, add `<APP_URL>/auth.php` as a redirect URI.
+
+The database creates its tables on the first request. `APACHE_WORKERS` (default 12) caps how many requests run at once, to stay within small plans' memory.
 
 ## Deploy on cPanel
 
@@ -49,15 +91,9 @@ What helps people fill it out:
    1. In **Select PHP Version**, use PHP 8.1 or later and enable the extensions listed above.
    2. Turn on **SSL/TLS** (AutoSSL); `public/.htaccess` redirects every request to HTTPS.
    3. Make sure `data/` is writable, since sign-in sessions are stored in `data/sessions`.
-6. If you used the app before MySQL, copy those PDS records into the database:
+   4. Set `DATA_KEY` (see [Data Privacy Act](#data-privacy-act-ra-10173)) and keep a copy of it.
 
-   ```sh
-   php tools/migrate-json.php
-   ```
-
-   The old `data/*.json` files are left in place. Delete them once you have checked the import.
-
-If you leave Google settings empty, the app runs without the Sign in button.
+If you leave Google settings empty, the app runs without the Sign in button. Shared hosting usually has no LibreOffice, so the Work Experience Sheet downloads as Word only.
 
 ## Admin
 
@@ -118,12 +154,39 @@ For numbers others can check independently, add an open-source analytics service
 
 ```powershell
 .\tools\setup-local.ps1   # once: creates the local database and config.local.php
-.\tools\serve.ps1         # starts http://localhost:8000
+docker compose up -d --build   # starts http://localhost:8000 (Apache + PHP 8.3)
 ```
+
+- **Use Docker (recommended).** Apache serves many requests at once, like real hosting. PHP's built-in server (`php -S`, used by `tools\serve.ps1`) handles one request at a time on Windows. The browser loads the form's page images, fonts and scripts in parallel, so with `php -S` the live preview can stay blank and exports can time out.
+- In the container, the database address comes from `compose.yaml`; the rest (user, password, Google keys) still comes from `config.local.php`. Environment variables always win over `config.local.php`.
 
 - `setup-local.ps1` asks for your MySQL root password, which it does not save. It creates the database and user and writes `config.local.php`.
 - `serve.ps1` turns on the PHP extensions the app needs, so you don't need a `php.ini`.
 - For Google sign-in on your PC, add `http://localhost:8000/auth.php` as a redirect URI and put the client ID and secret in `config.local.php`.
+
+## Development checks
+
+Development tools only; the site itself needs nothing from Composer or npm. Requires PHP 8.2+ (8.3 recommended), Composer and Node 22.
+
+```powershell
+composer install          # PHPUnit and PHPStan
+npm ci                    # ESLint
+composer test             # unit tests (no database needed)
+composer analyse          # PHPStan static analysis, level 5
+composer lint             # PHP syntax of every file
+npm run lint              # ESLint for public/*.js
+gitleaks git .            # scan the git history for leaked secrets
+```
+
+- **CI:** GitHub Actions (`.github/workflows/ci.yml`) runs all of these on every push and pull request. PHP syntax is checked on PHP 8.0 and 8.3.
+- **Tests:** `tests/` covers:
+  - Encryption: round trip, wrong key, tampering.
+  - The cross-site request check.
+  - The Content-Security-Policy header.
+  - Consent.
+  - The server's data cleaning (`pds_clean`).
+  - The form analyzer, against the official template.
+- **Claude Code:** `.claude/settings.json` runs `tools/hooks/check-edit.mjs` after every edit: PHP syntax for `.php` files, ESLint for `public/*.js`.
 
 ## Styling
 
@@ -138,7 +201,9 @@ The UI uses Tailwind CSS v4.3.3 and daisyUI v5.7.50 through the standalone CLI, 
 - The Inter font is self-hosted at `public/fonts/` (v5.3.0 of `@fontsource-variable/inter`, SIL Open Font License).
 - Answers on the form preview use Arial Narrow Bold when the device has it, otherwise the self-hosted Roboto Condensed Bold (`@fontsource/roboto-condensed` 5.3.0, SIL Open Font License).
 - Text uses the self-hosted Geist and Geist Mono variable fonts (`@fontsource-variable/geist` and `geist-mono` 5.3.0), and page and section titles use Instrument Serif (`@fontsource/instrument-serif` 5.3.0); all SIL Open Font License, licenses in `public/fonts/`. Inter stays as the fallback.
-- The admin page renders PDFs with pdf.js 3.11.174 (Apache 2.0), kept at `public/vendor/pdfjs-3.11.174/`.
+- **Work Experience Sheet:** filled into the official CSC Word template (`lib/templates/wes.docx`, `lib/wes-docx.php`). It downloads as Word, or as PDF converted from that same Word file by LibreOffice. The Docker image includes LibreOffice and Liberation fonts (Arial-compatible). On a host without LibreOffice, the PDF button is turned off and Word still works; set `SOFFICE` to LibreOffice's path if it is installed somewhere else.
+- **Merge PDFs** combines the PDS, Work Experience Sheet and supporting documents into one PDF in the browser with pdf-lib 1.17.1 (MIT), kept at `public/vendor/pdf-lib-1.17.1/` and loaded only when used; files are never uploaded.
+- The admin page renders PDFs with pdf.js 6.5.438 (Apache 2.0), kept at `public/vendor/pdfjs-6.5.438/` and loaded only when a PDF is added, with `isEvalSupported: false`.
 - Date fields use the [Cally](https://wicky.nillia.ms/cally/) calendar web component (v0.9.2, MIT), kept at `public/vendor/cally-0.9.2.js` and styled by daisyUI's `cally` class. To upgrade, download `dist/cally.js` of the new version from npm into `public/vendor/` and update the script tag in `public/index.php`.
 
 ## Project layout
@@ -151,7 +216,9 @@ The UI uses Tailwind CSS v4.3.3 and daisyUI v5.7.50 through the standalone CLI, 
 | `tools/css/app.css` | Tailwind + daisyUI source for `public/app.css` |
 | `lib/` | Storage, sign-in, xlsx reader/writer, PDS cell map, `schema.json` (form fields) and the official template |
 | `sql/schema.sql` | Database tables |
-| `tools/` | Local setup, local server, the JSON-to-MySQL migration, and the layout builder for new form revisions |
+| `tools/` | Local setup, CSS build, admin accounts, lint and edit hooks, and the layout builder for new form revisions |
+| `tests/` | PHPUnit tests |
+| `Dockerfile`, `compose*.yaml` | Container image, local development and production setups |
 | `data/` | Sign-in sessions; not committed |
 
 ## Privacy and security
@@ -170,6 +237,17 @@ The UI uses Tailwind CSS v4.3.3 and daisyUI v5.7.50 through the standalone CLI, 
 - New PDS and Excel requests are rate-limited per network address.
 - Version history keeps the last 15 versions of a PDS, without images, and deletes them with it.
 - Set `CONTACT_EMAIL` in the config to show a contact for data requests on the privacy notice.
+
+### Data Privacy Act (RA 10173)
+
+A PDS holds sensitive personal information, so PDSync adds these safeguards:
+
+- **Encryption at rest.** Every stored PDS and version is sealed with AES-256-GCM (`lib/crypto.php`). The key is `DATA_KEY` in `config.local.php` (32 random bytes, base64: `php -r "echo base64_encode(random_bytes(32));"`), or, if that is empty, `data/data.key`, created on first use. **Back the key up.** Without it the stored PDS cannot be opened. Records saved before encryption are sealed once by the database upgrade.
+- **Consent.** Nothing is saved on the server until the person agrees to the privacy notice. The server refuses to create a PDS without it, and `consents` records the notice version and time. Raise `CONSENT_VERSION` in `lib/config.php` when the notice changes, and everyone is asked again.
+- **Rights.** Signed-in users can "Download all my data" (`account.php?export`) and "Delete my account" from the account menu.
+- **Accountability.** Admin sign-ins, dashboard views, downloads and form version changes go to `admin_log` and show on the dashboard's Data protection panel, with a breach response checklist.
+- **DPO.** Set `DPO_NAME` and `DPO_EMAIL` to show your Data Protection Officer on the privacy notice and the admin page.
+- Once you hold many people's sensitive data, check whether you need to register with the National Privacy Commission.
 
 ### Updating an existing install
 

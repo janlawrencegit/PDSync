@@ -1,0 +1,14 @@
+# Kept out of the image: secrets, people's data, and development-only files.
+config.local.php
+data/
+.git/
+node_modules/
+vendor/
+tools/bin/
+.playwright-mcp/
+.phpunit.cache/
+docs/
+tests/
+.github/
+.claude/
+.env

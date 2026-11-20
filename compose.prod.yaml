@@ -1,0 +1,50 @@
+# Production: the app and MySQL on one Docker host, configured by environment variables in .env (see .env.example).
+#   cp .env.example .env    # then fill it in
+#   docker compose -f compose.prod.yaml up -d --build
+# Put a TLS reverse proxy (Caddy, Traefik, nginx) in front and forward to APP_PORT; it must send X-Forwarded-Proto.
+# The database creates its own tables on the first request. Back up both volumes, and keep DATA_KEY safe:
+# without it the stored PDS cannot be opened.
+services:
+  app:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${APP_PORT:-8080}:80"
+    volumes:
+      - app-data:/var/www/app/data
+    environment:
+      APP_URL: ${APP_URL:?set APP_URL in .env}
+      DB_DSN: "mysql:host=db;port=3306;dbname=pdsync;charset=utf8mb4"
+      DB_USER: pdsync
+      DB_PASS: ${DB_PASS:?set DB_PASS in .env}
+      DATA_KEY: ${DATA_KEY:?set DATA_KEY in .env}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      ADMIN_EMAILS: ${ADMIN_EMAILS:-}
+      CONTACT_EMAIL: ${CONTACT_EMAIL:-}
+      DPO_NAME: ${DPO_NAME:-}
+      DPO_EMAIL: ${DPO_EMAIL:-}
+      TIMEZONE: ${TIMEZONE:-Asia/Manila}
+    depends_on:
+      db:
+        condition: service_healthy
+
+  db:
+    image: mysql:8.4
+    restart: unless-stopped
+    volumes:
+      - db-data:/var/lib/mysql
+    environment:
+      MYSQL_DATABASE: pdsync
+      MYSQL_USER: pdsync
+      MYSQL_PASSWORD: ${DB_PASS:?set DB_PASS in .env}
+      MYSQL_RANDOM_ROOT_PASSWORD: "yes"
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -u pdsync -p\"$$MYSQL_PASSWORD\" --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  app-data:
+  db-data:
