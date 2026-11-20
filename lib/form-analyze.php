@@ -294,7 +294,7 @@ function fa_analyze(string $newBin): array
     $max = [];
     foreach ($cur['tables'] as $t => [$s, $start, $cols]) {
         $newCols = [];
-        $row = null;
+        $row = $ns = null;
         foreach ($cols as $c => $col) {
             $hit = $locate("t:$t:0:$c", "$s!$col$start", ['tables', $t, $c]);
             if (!$hit) continue;
@@ -303,7 +303,7 @@ function fa_analyze(string $newBin): array
             $newCols[$c] = xg_letters($nc);
             $row ??= $nr;
         }
-        if (count($newCols) === count($cols)) {
+        if ($ns !== null && count($newCols) === count($cols)) {
             $map['tables'][$t] = [$ns, $row, $newCols];
             $was = fa_table_rows($get('old', $s), $start, array_values($cols));
             $now = fa_table_rows($get('new', $ns), $row, array_values($newCols));

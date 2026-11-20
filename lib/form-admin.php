@@ -126,7 +126,7 @@ function fv_set_ref(array $f, int $index, ?string $addr): array
         $b = xlsx_open(file_get_contents($f['template']));
         $sheet = current(array_filter(array_keys($b['sheets']), fn($s) => strcasecmp(trim($s), trim($m[1])) === 0));
         if ($sheet === false) throw new RuntimeException("There is no sheet called $m[1] in this form.");
-        $addr = $sheet . '!' . (isset($m[3]) && $m[3] !== '' ? 'shape:' . $m[3] : strtoupper($m[2]));
+        $addr = $sheet . '!' . (($m[3] ?? '') !== '' ? 'shape:' . $m[3] : strtoupper($m[2]));
     }
     $map = &$f['map'];
     switch ($path[0]) {

@@ -31,6 +31,10 @@ if ($api !== null) {
     $body = $_SERVER['REQUEST_METHOD'] === 'POST' && str_contains($_SERVER['CONTENT_TYPE'] ?? '', 'json')
         ? (json_decode(file_get_contents('php://input', false, null, 0, 2000000), true) ?: []) : [];
     $editable = fn() => $f && empty($f['builtin']) ?: $reply(400, ['error' => 'The built-in version cannot be changed.']);
+    // Changes to form versions are recorded in the admin activity log.
+    if ($_SERVER['REQUEST_METHOD'] === 'POST' && !in_array($api, ['calib', 'paint'], true)) {
+        admin_log('Form versions: ' . preg_replace('/[^a-z-]/', '', (string)$api), (string)($_GET['id'] ?? ($_POST['name'] ?? '')));
+    }
     try {
         switch ($api) {
             case 'list':
@@ -138,7 +142,7 @@ $icon = fn($d, $cls = 'size-4') => '<svg class="' . $cls . '" viewBox="0 0 24 24
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex">
 <title>Form versions - PDSync Admin</title>
-<script>try { const t = localStorage.getItem('pds-theme'); if (t) document.documentElement.dataset.theme = t; } catch {}</script>
+<script nonce="<?= csp_nonce() ?>">try { const t = localStorage.getItem('pds-theme'); if (t) document.documentElement.dataset.theme = t; } catch {}</script>
 <link rel="preload" href="fonts/geist-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="fonts/instrument-serif-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="app.css?v=<?= $v('app.css') ?>">
@@ -184,7 +188,6 @@ $icon = fn($d, $cls = 'size-4') => '<svg class="' . $cls . '" viewBox="0 0 24 24
 </dialog>
 <script src="ui.js?v=<?= $v('ui.js') ?>"></script>
 <script src="form-calib.js?v=<?= $v('form-calib.js') ?>"></script>
-<script src="vendor/pdfjs-3.11.174/pdf.min.js"></script>
 <script src="forms.js?v=<?= $v('forms.js') ?>"></script>
 </body>
 </html>

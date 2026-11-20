@@ -48,7 +48,7 @@ async function showList() {
     if (!f.builtin && f.status !== 'active' && !f.pds) actions.append(el('button', { className: 'btn btn-sm btn-ghost text-error', onclick: () => remove(f) }, 'Delete'));
     return el('div', { className: 'fv-row' },
       el('div', { className: 'min-w-0' }, el('div', { className: 'flex flex-wrap items-center gap-2' }, el('b', {}, f.name), tag),
-        el('p', { className: 'text-xs text-base-content/60' }, [f.builtin ? 'Built in' : `Added ${new Date(f.created).toLocaleDateString()}`, `${f.pds} PDS`, f.images ? `${f.images} page images` : 'No page images yet'].join(' · '))),
+        el('p', { className: 'text-xs text-base-content/60' }, [f.builtin ? 'Built in' : `Added ${new Date(f.created).toLocaleDateString([], { dateStyle: 'medium' })}`, `${f.pds} PDS`, f.images ? `${f.images} page images` : 'No page images yet'].join(' · '))),
       actions);
   });
   const file = el('input', { type: 'file', accept: '.xlsx', className: 'file-input w-full', required: true });
@@ -358,8 +358,11 @@ function stepImages(s) {
     if (!files.length) return;
     const blobs = [];
     if (files[0].type === 'application/pdf' || /\.pdf$/i.test(files[0].name)) {
-      pdfjsLib.GlobalWorkerOptions.workerSrc = 'vendor/pdfjs-3.11.174/pdf.worker.min.js';
-      const pdf = await pdfjsLib.getDocument({ data: await files[0].arrayBuffer() }).promise;
+      // pdf.js 6 (an ES module), loaded only when a PDF is added. isEvalSupported stays off so a crafted PDF cannot
+      // run code in the page (CVE-2024-4367 class of issues).
+      const pdfjsLib = await import('./vendor/pdfjs-6.5.438/pdf.min.js');
+      pdfjsLib.GlobalWorkerOptions.workerSrc = 'vendor/pdfjs-6.5.438/pdf.worker.min.js';
+      const pdf = await pdfjsLib.getDocument({ data: await files[0].arrayBuffer(), isEvalSupported: false }).promise;
       if (pdf.numPages < need) throw new Error(`The PDF has ${pdf.numPages} pages; the form needs ${need}.`);
       for (let n = 1; n <= need; n++) {
         status.textContent = `Reading page ${n} of ${need}…`;
@@ -369,7 +372,7 @@ function stepImages(s) {
         const g = cv.getContext('2d');
         g.fillStyle = '#fff';
         g.fillRect(0, 0, cv.width, cv.height);
-        await p.render({ canvasContext: g, viewport: vp }).promise;
+        await p.render({ canvasContext: g, canvas: cv, viewport: vp }).promise;
         blobs.push(await new Promise((r) => cv.toBlob(r, 'image/png')));
       }
     } else {
