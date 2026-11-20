@@ -7,7 +7,7 @@ parameters:
         - tools
     excludePaths:
         - public/vendor
-        - tools/bin
+        - tools/bin (?)
     bootstrapFiles:
         - tests/bootstrap.php
     phpVersion: 80000
