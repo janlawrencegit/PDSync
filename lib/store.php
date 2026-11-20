@@ -2,6 +2,7 @@
 // PDS storage in MySQL (see sql/schema.sql); anonymous records are reached by key, account records by owner.
 require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/forms.php';
+require_once __DIR__ . '/crypto.php';
 
 const ANON_DAYS = 180;
 const MAX_BYTES = 3145728;
@@ -34,7 +35,7 @@ function pds_read($id): ?array
     $st->execute([$id]);
     $rec = $st->fetch();
     if (!$rec) return null;
-    $rec['data'] = json_decode($rec['data'], true);
+    $rec['data'] = json_decode(unseal($rec['data']), true);
     return $rec;
 }
 
@@ -85,6 +86,13 @@ function pds_clean(array $in): array
             if (isset($f['if']) && ($out['fields'][$f['if'][0]] ?? '') !== $f['if'][1]) $out['fields'][$f['k']] = '';
         }
     }
+    // Work Experience Sheet (CS Form 212 attachment): its own list, so it does not depend on the form version's schema.
+    $long = fn($v) => is_scalar($v) && preg_match('/^.{0,3000}/su', trim(str_replace("\r", '', (string)$v)), $m) ? $m[0] : '';
+    $out['wes'] = array_values(array_map(fn($e) => [
+        'from' => $str($e['from'] ?? ''), 'to' => $str($e['to'] ?? ''), 'position' => $str($e['position'] ?? ''),
+        'unit' => $str($e['unit'] ?? ''), 'supervisor' => $str($e['supervisor'] ?? ''), 'agency' => $str($e['agency'] ?? ''),
+        'accomplishments' => $long($e['accomplishments'] ?? ''), 'duties' => $long($e['duties'] ?? ''),
+    ], array_slice(array_filter(is_array($in['wes'] ?? null) ? $in['wes'] : [], 'is_array'), 0, 40)));
     // Enforced here so a client cannot save a different permanent address while "same as residential" is ticked.
     if (($out['fields']['perm_same'] ?? '') === 'Yes') {
         foreach (['house', 'street', 'subd', 'brgy', 'city', 'prov', 'zip'] as $s) $out['fields']["perm_$s"] = $out['fields']["res_$s"] ?? '';
@@ -127,7 +135,7 @@ function pds_create(array $data, string $name, ?int $uid): array
     $key = bin2hex(random_bytes(16));
     $clean = pds_clean($data);
     db()->prepare('INSERT INTO pds (id, key_hash, user_id, form, name, data, progress, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, NOW(), NOW())')
-        ->execute([$id, hash('sha256', $key), $uid, pds_form_id(), pds_name($name), json_encode($clean), pds_progress($clean)]);
+        ->execute([$id, hash('sha256', $key), $uid, pds_form_id(), pds_name($name), seal(json_encode($clean)), pds_progress($clean)]);
     return ['id' => $id, 'key' => $key];
 }
 
@@ -137,7 +145,7 @@ function pds_update(string $id, array $data, string $name): string
     $clean = pds_clean($data);
     pds_snapshot($id);
     db()->prepare('UPDATE pds SET data = ?, name = ?, form = ?, progress = ?, updated_at = NOW() WHERE id = ?')
-        ->execute([json_encode($clean), pds_name($name), pds_form_id(), pds_progress($clean), $id]);
+        ->execute([seal(json_encode($clean)), pds_name($name), pds_form_id(), pds_progress($clean), $id]);
     $st = db()->prepare('SELECT updated_at FROM pds WHERE id = ?');
     $st->execute([$id]);
     return (string)$st->fetchColumn();
@@ -154,7 +162,7 @@ function pds_snapshot(string $id): void
     if (!$rec) return;
     foreach (IMAGE_FIELDS as $k) unset($rec['data']['fields'][$k]);
     db()->prepare('INSERT INTO pds_versions (pds_id, saved_at, data) SELECT id, updated_at, ? FROM pds WHERE id = ?')
-        ->execute([json_encode($rec['data']), $id]);
+        ->execute([seal(json_encode($rec['data'])), $id]);
     db()->prepare('DELETE FROM pds_versions WHERE pds_id = ? AND id NOT IN (SELECT id FROM (SELECT id FROM pds_versions WHERE pds_id = ? ORDER BY saved_at DESC, id DESC LIMIT ' . VERSIONS_KEPT . ') AS kept)')
         ->execute([$id, $id]);
 }
@@ -171,7 +179,7 @@ function pds_version(array $rec, $vid): ?array
 {
     $st = db()->prepare('SELECT data FROM pds_versions WHERE id = ? AND pds_id = ?');
     $st->execute([(int)$vid, $rec['id']]);
-    $data = json_decode((string)$st->fetchColumn(), true);
+    $data = json_decode(unseal((string)$st->fetchColumn()), true);
     if (!is_array($data)) return null;
     foreach (IMAGE_FIELDS as $k) $data['fields'][$k] = $rec['data']['fields'][$k] ?? '';
     return $data;
@@ -218,6 +226,8 @@ function pds_pick(array $data, array $sections): array
         if (!in_array($sec['id'], $sections, true)) continue;
         foreach ($sec['fields'] ?? [] as $f) $out['fields'][$f['k']] = $data['fields'][$f['k']] ?? '';
         foreach ($sec['tables'] ?? [] as $t) $out['tables'][$t['k']] = $data['tables'][$t['k']] ?? [];
+        // The Work Experience Sheet goes with Section V.
+        if ($sec['id'] === 'work') $out['wes'] = $data['wes'] ?? [];
     }
     return $out;
 }
@@ -225,4 +235,19 @@ function pds_pick(array $data, array $sections): array
 function h($s): string
 {
     return htmlspecialchars((string)$s, ENT_QUOTES, 'UTF-8');
+}
+
+// Records agreement to the privacy notice for a PDS (and its account), once per notice version.
+function consent_record(?string $pdsId, ?int $uid): void
+{
+    $st = db()->prepare('SELECT 1 FROM consents WHERE version = ? AND (pds_id <=> ?) AND (user_id <=> ?) LIMIT 1');
+    $st->execute([CONSENT_VERSION, $pdsId, $uid]);
+    if ($st->fetchColumn()) return;
+    db()->prepare('INSERT INTO consents (pds_id, user_id, version, agreed_at) VALUES (?, ?, ?, NOW())')->execute([$pdsId, $uid, CONSENT_VERSION]);
+}
+
+// True when the request carries agreement to the current privacy notice.
+function consent_given(array $body): bool
+{
+    return ($body['consent'] ?? '') === CONSENT_VERSION;
 }

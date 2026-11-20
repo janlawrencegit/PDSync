@@ -123,3 +123,21 @@ function admin_allowed(): bool
     session_write_close();
     return $ok;
 }
+
+// Admin activity log (Data Privacy Act accountability): who did or viewed what, and when. Kept 365 days.
+function admin_log(string $action, string $detail = '', ?string $who = null): void
+{
+    try {
+        $who ??= admin_google() ?? ($_SESSION['admin'] ?? 'unknown');
+        if (random_int(1, 50) === 1) db()->exec('DELETE FROM admin_log WHERE at < NOW() - INTERVAL 365 DAY');
+        db()->prepare('INSERT INTO admin_log (at, admin, action, detail) VALUES (NOW(), ?, ?, ?)')
+            ->execute([mb_substr($who, 0, 255), mb_substr($action, 0, 64), mb_substr($detail, 0, 255)]);
+    } catch (Throwable $e) {
+        error_log((string)$e);
+    }
+}
+
+function admin_log_recent(int $n = 25): array
+{
+    return db()->query('SELECT UNIX_TIMESTAMP(at) AS at, admin, action, detail FROM admin_log ORDER BY id DESC LIMIT ' . max(1, $n))->fetchAll();
+}

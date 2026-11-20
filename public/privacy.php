@@ -3,7 +3,8 @@
 require __DIR__ . '/../lib/config.php';
 require_once __DIR__ . '/../lib/brand.php';
 security_headers();
-$contact = cfg('CONTACT_EMAIL');
+$contact = cfg('DPO_EMAIL') ?: cfg('CONTACT_EMAIL');
+$dpo = cfg('DPO_NAME');
 $h = fn($s) => htmlspecialchars((string)$s, ENT_QUOTES, 'UTF-8');
 $ico = fn($d, $cls = 'size-4') => '<svg class="' . $cls . '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' . $d . '</svg>';
 // One card per section: its anchor, title and icon.
@@ -15,7 +16,7 @@ $sec = fn($id, $title, $path) => '<section id="' . $id . '" class="doc-card"><h2
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Privacy notice - PDSync</title>
-<script>try { const t = localStorage.getItem('pds-theme'); if (t) document.documentElement.dataset.theme = t; } catch {}</script>
+<script nonce="<?= csp_nonce() ?>">try { const t = localStorage.getItem('pds-theme'); if (t) document.documentElement.dataset.theme = t; } catch {}</script>
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="preload" href="fonts/geist-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="fonts/instrument-serif-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
@@ -31,8 +32,8 @@ $sec = fn($id, $title, $path) => '<section id="' . $id . '" class="doc-card"><h2
     <span class="hero-icon"><?= $ico('<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/>', 'size-6') ?></span>
     <p class="eyebrow">Data Privacy Act of 2012 &middot; RA 10173</p>
     <h1 class="display-title">Privacy <em>notice</em></h1>
-    <p class="lead">PDSync helps you fill out the CSC Personal Data Sheet (CS Form 212). This notice explains what happens to your information, as required by the Data Privacy Act of 2012 (Republic Act No. 10173).</p>
-    <p class="mt-3 text-xs text-base-content/50">Last updated <?= date('F j, Y', filemtime(__FILE__)) ?></p>
+    <p class="lead">PDSync helps you fill out the CSC Personal Data Sheet (CS Form No. 212). This notice explains what happens to your information, as required by the Data Privacy Act of 2012 (Republic Act No. 10173).</p>
+    <p class="mt-3 text-xs text-base-content/50">Notice version <?= $h(CONSENT_VERSION) ?> &middot; last updated <?= date('F j, Y', filemtime(__FILE__)) ?></p>
   </section>
 
   <div class="mt-8 grid gap-3 sm:grid-cols-3">
@@ -55,7 +56,7 @@ $sec = fn($id, $title, $path) => '<section id="' . $id . '" class="doc-card"><h2
       <?= $sec('keep', 'What we keep', '<path d="M21 8v13H3V8"/><path d="M1 3h22v5H1z"/><path d="M10 12h4"/>') ?>
         <ul>
           <li><b>Your PDS answers</b>, including your photo, signature and thumbmark if you add them. We keep them only so you can continue, preview and export your PDS.</li>
-          <li><b>If you sign in with Google:</b> your Google account ID, e-mail address and name. We never receive or keep your Google password.</li>
+          <li><b>If you sign in with Google:</b> your Google account ID, email address and name. We never receive or keep your Google password.</li>
           <li><b>Usage counts</b>, such as how many people opened the app each day. They contain no personal information and no cookies are used for them.</li>
           <?php if ((cfg('UMAMI_SCRIPT') !== '' && cfg('UMAMI_WEBSITE_ID') !== '') || cfg('GOATCOUNTER_URL') !== ''): ?>
           <li><b>Visit statistics</b> are also counted with <?= cfg('GOATCOUNTER_URL') !== '' ? 'GoatCounter' : 'Umami' ?>, an open-source analytics service that uses no cookies and does not identify you. Your PDS answers are never sent to it.</li>
@@ -82,9 +83,11 @@ $sec = fn($id, $title, $path) => '<section id="' . $id . '" class="doc-card"><h2
 
       <?= $sec('rights', 'Your choices and rights', '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="m16 11 2 2 4-4"/>') ?>
         <ul>
-          <li><b>Get a copy:</b> use "Download a copy" in the &middot;&middot;&middot; menu.</li>
+          <li><b>Get a copy:</b> use "Download a copy" in the &middot;&middot;&middot; menu, or, when signed in, "Download all my data" in your account menu for everything we keep about you.</li>
           <li><b>Correct it:</b> edit your PDS at any time.</li>
           <li><b>Delete it:</b> use "Delete my PDS from this PC" or, when signed in, "Delete this PDS" in the &middot;&middot;&middot; menu. It is removed from our server right away.</li>
+          <li><b>Delete your account:</b> "Delete my account" in your account menu erases the account and every PDS in it at once.</li>
+          <li><b>Withdraw consent:</b> delete your PDS or account; nothing is kept after that.</li>
           <li>On a shared computer, delete your PDS or sign out when you finish.</li>
           <li>You may also file a complaint with the National Privacy Commission (privacy.gov.ph).</li>
         </ul>
@@ -93,12 +96,14 @@ $sec = fn($id, $title, $path) => '<section id="' . $id . '" class="doc-card"><h2
       <?= $sec('security', 'Security', '<rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>') ?>
         <ul>
           <li>Connections are encrypted (HTTPS). Sign-in uses Google's secure sign-in, and requests from other websites are blocked.</li>
+          <li>Your answers are also <b>encrypted on our server</b> (AES-256), so a copy of the database alone cannot be read.</li>
+          <li>Nothing is saved on our server until you agree to this notice. Every admin action is logged.</li>
         </ul>
       </section>
 
       <?php if ($contact !== ''): ?>
       <?= $sec('contact', 'Contact', '<rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-10 6L2 7"/>') ?>
-        <ul><li>For questions or requests about your data, e-mail <a class="link" href="mailto:<?= $h($contact) ?>"><?= $h($contact) ?></a>.</li></ul>
+        <ul><li>For questions or requests about your data, contact our Data Protection Officer<?= $dpo !== '' ? ', ' . $h($dpo) . ',' : '' ?> at <a class="link" href="mailto:<?= $h($contact) ?>"><?= $h($contact) ?></a>.</li></ul>
       </section>
       <?php endif; ?>
     </div>

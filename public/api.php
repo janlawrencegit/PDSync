@@ -82,13 +82,17 @@ if ($rec) {
         reply(409, ['error' => 'This PDS was changed in another tab or device.', 'updated' => $rec['updated_at']]);
     }
     $updated = pds_update($rec['id'], pds_keep_images($body['data'], $rec), $name);
+    if (consent_given($body)) consent_record($rec['id'], $uid);
     if (!$uid) pds_cookie_set($rec['id'], $rec['key']);
     stats_unique('active_pds', $rec['id']);
     reply(200, ['id' => $rec['id'], 'updated' => $updated]);
 }
 
+// Nothing is stored on the server until the person agrees to the privacy notice (Data Privacy Act).
+if (!consent_given($body)) reply(428, ['error' => 'consent', 'version' => CONSENT_VERSION]);
 if (!rate_ok('create', 30, 3600)) reply(429, ['error' => 'Too many new PDS from this network. Please try again in an hour.']);
 $res = pds_create(pds_keep_images($body['data'], null), $name, $uid);
+consent_record($res['id'], $uid);
 stats_add('pds_created');
 stats_unique('active_pds', $res['id']);
 if (!$uid) pds_cookie_set($res['id'], $res['key']);

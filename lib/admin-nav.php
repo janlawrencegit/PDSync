@@ -20,7 +20,7 @@ function admin_nav(string $active, ?string $who, bool $google): void
     <?php endforeach; ?>
   </nav>
   <div class="ml-auto flex items-center gap-1.5">
-    <a href="./" class="btn btn-sm btn-ghost" title="Open the PDS editor"><?= $ico('<path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>') ?><span class="hidden md:inline">Open the app</span></a>
+    <a href="./" class="btn btn-sm btn-ghost" title="Open the PDS editor"><?= $ico('<path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>') ?><span class="hidden md:inline">Open editor</span></a>
     <div class="dropdown dropdown-end">
       <div tabindex="0" role="button" class="btn btn-ghost btn-sm gap-2 px-1.5" title="<?= h($who) ?>" aria-label="Account">
         <span class="grid size-7 place-items-center rounded-full bg-primary/10 text-xs font-semibold text-primary"><?= h(strtoupper(substr($who, 0, 1))) ?></span>

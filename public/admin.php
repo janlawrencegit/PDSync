@@ -4,6 +4,7 @@
 require __DIR__ . '/../lib/admin.php';
 require_once __DIR__ . '/../lib/stats.php';
 require_once __DIR__ . '/../lib/admin-nav.php';
+require_once __DIR__ . '/../lib/crypto.php';
 
 security_headers();
 header('X-Frame-Options: DENY');
@@ -19,12 +20,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!admin_csrf_ok($_POST['csrf'] ?? null)) {
         $error = 'Your session expired. Please try again.';
     } elseif (isset($_POST['logout'])) {
+        admin_log('Signed out');
         admin_logout();
         header('Location: admin.php');
         exit;
     } else {
         $error = admin_login(trim((string)($_POST['user'] ?? '')), (string)($_POST['pass'] ?? ''));
         if (!$error) {
+            admin_log('Signed in', 'password');
             header('Location: admin.php');
             exit;
         }
@@ -34,6 +37,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 $admin = admin_user() ?? $googleAdmin;
 $viaGoogle = !admin_user() && $googleAdmin;
 $stats = null;
+$forms = [];
 if ($admin) {
     try {
         $count = fn($sql) => (int)db()->query($sql)->fetchColumn();
@@ -46,6 +50,17 @@ if ($admin) {
         $forms = db()->query('SELECT form, COUNT(*) AS n FROM pds GROUP BY form ORDER BY form')->fetchAll();
         stats_forget();
         $usage = stats_report();
+        // Opening the dashboard is logged at most once per admin session.
+        if (empty($_SESSION['viewed'])) {
+            admin_log('Opened dashboard', $viaGoogle ? 'Google' : 'password');
+            $_SESSION['viewed'] = 1;
+        }
+        $activity = admin_log_recent(25);
+        $privacy = [
+            'sealed' => (int)db()->query("SELECT COUNT(*) FROM pds WHERE data LIKE 'enc1:%'")->fetchColumn(),
+            'total' => (int)db()->query('SELECT COUNT(*) FROM pds')->fetchColumn(),
+            'consents' => (int)db()->query('SELECT COUNT(*) FROM consents WHERE version = ' . db()->quote(CONSENT_VERSION))->fetchColumn(),
+        ];
     } catch (Throwable $e) {
         error_log((string)$e);
     }
@@ -53,6 +68,7 @@ if ($admin) {
 
 // Usage counts as CSV (one row per day, then one per month), for reports and proof of use.
 if ($admin && isset($_GET['csv']) && isset($usage)) {
+    admin_log('Downloaded usage CSV');
     header('Content-Type: text/csv; charset=utf-8');
     header('Content-Disposition: attachment; filename="pdsync-usage-' . stats_periods()[0] . '.csv"');
     $out = fopen('php://output', 'w');
@@ -101,6 +117,7 @@ function visitors_chart(array $days, array $usage): string
     $vals = array_map(fn($d) => (int)($usage['days'][$d]['visitors'] ?? 0), $days);
     $max = max(1, ...$vals);
     $mag = 10 ** floor(log10($max));
+    $top = 10 * $mag;
     foreach ([1, 2, 5, 10] as $m) if ($m * $mag >= $max) { $top = $m * $mag; break; }
     $top = max($top, 4);
     [$W, $H, $L, $B, $T] = [1040, 250, 34, 26, 12];
@@ -142,7 +159,7 @@ function visitors_chart(array $days, array $usage): string
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex">
 <title>Admin - PDSync</title>
-<script>try { const t = localStorage.getItem('pds-theme'); if (t) document.documentElement.dataset.theme = t; } catch {}</script>
+<script nonce="<?= csp_nonce() ?>">try { const t = localStorage.getItem('pds-theme'); if (t) document.documentElement.dataset.theme = t; } catch {}</script>
 <link rel="preload" href="fonts/geist-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="fonts/instrument-serif-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="app.css?v=<?= filemtime(__DIR__ . '/app.css') ?>">
@@ -286,10 +303,78 @@ function visitors_chart(array $days, array $usage): string
       </dl>
     </section>
   </div>
+
+  <?php if (isset($privacy)): ?>
+  <?php $dpo = cfg('DPO_NAME'); $dpoMail = cfg('DPO_EMAIL') ?: cfg('CONTACT_EMAIL'); ?>
+  <section class="card-box" id="data-protection">
+    <div class="flex flex-wrap items-start justify-between gap-3">
+      <div>
+        <h2 class="font-semibold">Data protection</h2>
+        <p class="text-xs text-base-content/60">Data Privacy Act of 2012 (RA 10173): how PDSync protects what people store.</p>
+      </div>
+      <a href="privacy.php" class="btn btn-ghost btn-sm">View privacy notice</a>
+    </div>
+    <div class="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div class="dp-tile <?= $privacy['sealed'] === $privacy['total'] ? 'ok' : 'warn' ?>">
+        <span class="dp-label">Encrypted at rest</span>
+        <b><?= $n($privacy['sealed']) ?> <small>of <?= $n($privacy['total']) ?> PDS</small></b>
+        <span class="dp-note">AES-256-GCM &middot; key from <?= h(data_key_source()) ?></span>
+      </div>
+      <div class="dp-tile ok">
+        <span class="dp-label">Consents recorded</span>
+        <b><?= $n($privacy['consents']) ?></b>
+        <span class="dp-note">Privacy notice version <?= h(CONSENT_VERSION) ?></span>
+      </div>
+      <div class="dp-tile <?= $dpoMail !== '' ? 'ok' : 'warn' ?>">
+        <span class="dp-label">Data Protection Officer</span>
+        <b class="truncate text-base"><?= $dpo !== '' ? h($dpo) : ($dpoMail !== '' ? 'Contact set' : 'Not set') ?></b>
+        <span class="dp-note truncate"><?= $dpoMail !== '' ? h($dpoMail) : 'Add DPO_NAME and DPO_EMAIL to config.local.php' ?></span>
+      </div>
+      <div class="dp-tile ok">
+        <span class="dp-label">Retention</span>
+        <b class="text-base">180 days / 30 days</b>
+        <span class="dp-note">Unsigned PDS / Trash, then deleted</span>
+      </div>
+    </div>
+    <?php if (data_key_source() !== 'DATA_KEY setting'): ?>
+    <p class="mt-3 rounded-field bg-warning/15 px-3 py-2 text-xs">The encryption key is in <b>data/data.key</b>. Back it up somewhere safe (without it, stored PDS cannot be opened), or move it to <b>DATA_KEY</b> in config.local.php when you deploy.</p>
+    <?php endif; ?>
+
+    <details class="dp-breach mt-4">
+      <summary>If there is a data breach: what to do</summary>
+      <ol>
+        <li><b>Contain it.</b> Put the site in maintenance, block the access that was misused, and change the database password, the Google client secret and, if it may have been exposed, the encryption key.</li>
+        <li><b>Assess it.</b> Write down what data, how many people, and since when. Stored answers are encrypted; the risk is much higher if the key was exposed too.</li>
+        <li><b>Notify the National Privacy Commission</b> within 72 hours of learning of a breach of sensitive personal information that may cause serious harm (privacy.gov.ph).</li>
+        <li><b>Notify the people affected</b> in the same period: what happened, what data, what you are doing, what they can do, and who to contact.</li>
+        <li><b>Keep a record</b> of the timeline, actions and decisions, then fix the cause and review your safeguards.</li>
+      </ol>
+      <p class="mt-2 text-xs text-base-content/55">Based on NPC rules on personal data breach management; check the current NPC circulars for exact requirements.</p>
+    </details>
+
+    <h3 class="mb-2 mt-6 text-sm font-semibold">Admin activity</h3>
+    <?php if (!empty($activity)): ?>
+    <div class="overflow-x-auto">
+      <table class="table table-sm">
+        <thead><tr><th>When</th><th>Admin</th><th>Action</th><th>Detail</th></tr></thead>
+        <tbody>
+          <?php foreach ($activity as $a): ?>
+          <tr><td class="whitespace-nowrap tabular-nums" data-ts="<?= (int)$a['at'] ?>"></td><td class="max-w-48 truncate"><?= h($a['admin']) ?></td><td><?= h($a['action']) ?></td><td class="max-w-64 truncate text-base-content/60"><?= h($a['detail']) ?></td></tr>
+          <?php endforeach; ?>
+        </tbody>
+      </table>
+    </div>
+    <p class="mt-2 text-xs text-base-content/55">Admin sign-ins, dashboard views, downloads and form version changes, kept 365 days.</p>
+    <?php else: ?>
+    <p class="text-sm text-base-content/60">Nothing recorded yet.</p>
+    <?php endif; ?>
+  </section>
+  <script nonce="<?= csp_nonce() ?>">document.querySelectorAll('[data-ts]').forEach((td) => (td.textContent = new Date(td.dataset.ts * 1000).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })));</script>
+  <?php endif; ?>
   <?php endif; ?>
 </main>
 <?php site_footer(); ?>
-<script>
+<script nonce="<?= csp_nonce() ?>">
   // Chart tooltip: follows the hovered or focused day.
   (() => {
     const chart = document.getElementById('chart'), tip = document.getElementById('chart-tip');

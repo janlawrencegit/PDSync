@@ -3,12 +3,15 @@
 
 const DATA_DIR = __DIR__ . '/../data';
 
+// An environment variable, when set, wins over config.local.php, so a container or host can supply settings (for
+// example the database address in compose.yaml) without editing the file.
 function cfg(string $k): string
 {
     static $c = null;
     $file = __DIR__ . '/../config.local.php';
     $c ??= is_file($file) ? require $file : [];
-    return (string)($c[$k] ?? getenv($k) ?: '');
+    $env = getenv($k);
+    return (string)($env !== false && $env !== '' ? $env : ($c[$k] ?? ''));
 }
 
 // Errors are logged, never shown, so paths and queries do not leak to visitors.
@@ -40,7 +43,10 @@ function db(): PDO
 }
 
 // Database layout version; raise it when sql/schema.sql or the column list below changes.
-const SCHEMA_VERSION = 2;
+const SCHEMA_VERSION = 3;
+
+// Version of the privacy notice people agree to; raise it when the notice changes so everyone is asked again.
+const CONSENT_VERSION = '2026-11-19';
 
 // Brings an existing database up to date once, so updating the files is enough: creates missing tables from
 // sql/schema.sql and adds columns introduced after the first release. data/schema-version remembers it is done.
@@ -55,6 +61,13 @@ function db_upgrade(PDO $pdo): void
     $cols = $pdo->query('SHOW COLUMNS FROM pds')->fetchAll(PDO::FETCH_COLUMN);
     if (!in_array('progress', $cols, true)) $pdo->exec('ALTER TABLE pds ADD COLUMN progress TINYINT UNSIGNED NULL');
     if (!in_array('deleted_at', $cols, true)) $pdo->exec('ALTER TABLE pds ADD COLUMN deleted_at DATETIME NULL, ADD KEY deleted (deleted_at)');
+    // Version 3: answers are encrypted at rest; records saved before that are sealed once here.
+    require_once __DIR__ . '/crypto.php';
+    foreach (['pds', 'pds_versions'] as $table) {
+        $rows = $pdo->query("SELECT id, data FROM $table WHERE data NOT LIKE 'enc1:%'")->fetchAll();
+        $up = $pdo->prepare("UPDATE $table SET data = ? WHERE id = ?");
+        foreach ($rows as $r) $up->execute([seal($r['data']), $r['id']]);
+    }
     if (!is_dir(DATA_DIR)) mkdir(DATA_DIR, 0700, true);
     file_put_contents($flag, (string)SCHEMA_VERSION, LOCK_EX);
 }
@@ -72,14 +85,65 @@ function app_url(): string
     return (https_on() ? 'https' : 'http') . '://' . ($_SERVER['HTTP_HOST'] ?? 'localhost') . $dir;
 }
 
-// Rejects state-changing requests sent from another site.
+// Rejects state-changing requests sent from another site (CSRF). Browsers send Origin on such requests; when it is
+// missing, the Fetch Metadata header Sec-Fetch-Site and then Referer decide. A request with none of them does not come
+// from a browser page, so it carries no visitor's cookies to abuse.
 function require_same_origin(): void
 {
-    $origin = $_SERVER['HTTP_ORIGIN'] ?? '';
-    if ($origin !== '' && parse_url($origin, PHP_URL_HOST) . (($p = parse_url($origin, PHP_URL_PORT)) ? ":$p" : '') !== ($_SERVER['HTTP_HOST'] ?? '')) {
+    if (!same_origin_ok($_SERVER)) {
         http_response_code(403);
         exit('Cross-site request blocked.');
     }
+}
+
+// The decision behind require_same_origin(), from the request's server variables.
+function same_origin_ok(array $server): bool
+{
+    $host = $server['HTTP_HOST'] ?? '';
+    $hostOf = fn(string $url) => parse_url($url, PHP_URL_HOST) . (($p = parse_url($url, PHP_URL_PORT)) ? ":$p" : '');
+    $origin = $server['HTTP_ORIGIN'] ?? '';
+    $site = $server['HTTP_SEC_FETCH_SITE'] ?? '';
+    $referer = $server['HTTP_REFERER'] ?? '';
+    if ($origin !== '' && $origin !== 'null') return $hostOf($origin) === $host;
+    if ($site !== '') return in_array($site, ['same-origin', 'none'], true);
+    return $referer === '' || $hostOf($referer) === $host;
+}
+
+// Random value for this response that inline scripts must carry to run (Content-Security-Policy nonce).
+function csp_nonce(): string
+{
+    static $n = null;
+    return $n ??= base64_encode(random_bytes(16));
+}
+
+// Content-Security-Policy: scripts only from this site or with this response's nonce, no plugins, no framing by
+// other sites, forms and connections to this site only (plus the optional analytics service).
+function csp_header(): string
+{
+    $script = ["'self'", "'nonce-" . csp_nonce() . "'"];
+    $connect = ["'self'"];
+    if (cfg('UMAMI_SCRIPT') !== '' && ($h = parse_url(cfg('UMAMI_SCRIPT'), PHP_URL_HOST))) {
+        $script[] = "https://$h";
+        $connect[] = "https://$h";
+    }
+    if (cfg('GOATCOUNTER_URL') !== '' && ($h = parse_url(cfg('GOATCOUNTER_URL'), PHP_URL_HOST))) {
+        $script[] = 'https://gc.zgo.at';
+        $connect[] = "https://$h";
+    }
+    return implode('; ', [
+        "default-src 'self'",
+        'script-src ' . implode(' ', $script),
+        "style-src 'self' 'unsafe-inline'",
+        "img-src 'self' data: blob:",
+        "font-src 'self'",
+        'connect-src ' . implode(' ', $connect),
+        "worker-src 'self' blob:",
+        "frame-src 'self'",
+        "object-src 'none'",
+        "base-uri 'self'",
+        "form-action 'self'",
+        "frame-ancestors 'self'",
+    ]) . (https_on() ? '; upgrade-insecure-requests' : '');
 }
 
 function security_headers(): void
@@ -87,6 +151,8 @@ function security_headers(): void
     header('X-Content-Type-Options: nosniff');
     header('X-Frame-Options: SAMEORIGIN');
     header('Referrer-Policy: same-origin');
+    header('Content-Security-Policy: ' . csp_header());
+    header('Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=()');
     if (https_on()) header('Strict-Transport-Security: max-age=31536000');
 }
 

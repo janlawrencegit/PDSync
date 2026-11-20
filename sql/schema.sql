@@ -65,3 +65,26 @@ CREATE TABLE IF NOT EXISTS rate_limit (
   until DATETIME NOT NULL,
   KEY until (until)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Consent to the privacy notice (Data Privacy Act): which notice version was agreed to and when, per PDS or account.
+CREATE TABLE IF NOT EXISTS consents (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  pds_id CHAR(16) NULL,
+  user_id INT UNSIGNED NULL,
+  version VARCHAR(16) NOT NULL,
+  agreed_at DATETIME NOT NULL,
+  KEY consent_pds (pds_id),
+  KEY consent_user (user_id),
+  CONSTRAINT consents_pds FOREIGN KEY (pds_id) REFERENCES pds (id) ON DELETE CASCADE,
+  CONSTRAINT consents_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- What admins did and looked at, for accountability; kept 365 days.
+CREATE TABLE IF NOT EXISTS admin_log (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  at DATETIME NOT NULL,
+  admin VARCHAR(255) NOT NULL,
+  action VARCHAR(64) NOT NULL,
+  detail VARCHAR(255) NOT NULL DEFAULT '',
+  KEY admin_log_at (at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

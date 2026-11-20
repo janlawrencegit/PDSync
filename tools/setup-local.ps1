@@ -30,6 +30,4 @@ return [
 "@
 # Written without a BOM, since PHP would print one before every page.
 [IO.File]::WriteAllText($config, $php)
-$ext = Join-Path (Split-Path (Get-Command php).Source) 'ext'
-php -d "extension_dir=$ext" -d extension=pdo_mysql (Join-Path $root 'tools\migrate-json.php')
-Write-Host 'Done. Database pdsync is ready, config.local.php was written, and old saved PDS were copied in. Next: tools\serve.ps1'
+Write-Host 'Done. Database pdsync is ready and config.local.php was written. Next: docker compose up -d --build'

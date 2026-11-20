@@ -13,6 +13,13 @@ return [
     'TIMEZONE' => 'Asia/Manila',
     // Shown on the privacy notice as the contact for data requests (optional).
     'CONTACT_EMAIL' => '',
+    // Data Protection Officer (Data Privacy Act); shown on the privacy notice and the admin page.
+    'DPO_NAME' => '',
+    'DPO_EMAIL' => '',
+    // Key that encrypts stored PDS answers: 32 random bytes, base64. Create one with
+    //   php -r "echo base64_encode(random_bytes(32));"
+    // Keep a backup; without it stored PDS cannot be opened. If empty, data/data.key is created and used.
+    'DATA_KEY' => '',
     // Optional standard analytics, next to the built-in counts on the admin page (see README, Usage statistics).
     // Umami: the script URL and website ID from your Umami dashboard, e.g. 'https://cloud.umami.is/script.js'.
     'UMAMI_SCRIPT' => '',
