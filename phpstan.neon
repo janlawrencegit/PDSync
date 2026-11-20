@@ -1,0 +1,13 @@
+# Static analysis: finds undefined variables and functions, wrong argument types and dead code without running it.
+parameters:
+    level: 5
+    paths:
+        - lib
+        - public
+        - tools
+    excludePaths:
+        - public/vendor
+        - tools/bin
+    bootstrapFiles:
+        - tests/bootstrap.php
+    phpVersion: 80000

@@ -1,0 +1,14 @@
+{
+  "name": "pdsync",
+  "private": true,
+  "type": "module",
+  "description": "Development tools for PDSync: linting for the browser scripts.",
+  "scripts": {
+    "lint": "eslint public"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "eslint": "10.14.0",
+    "globals": "17.14.0"
+  }
+}

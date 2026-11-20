@@ -1,0 +1,17 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node tools/hooks/check-edit.mjs",
+            "timeout": 60,
+            "statusMessage": "Checking the edited file"
+          }
+        ]
+      }
+    ]
+  }
+}

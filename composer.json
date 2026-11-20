@@ -1,0 +1,26 @@
+{
+    "name": "janlawrence/pdsync",
+    "description": "Fill out the CSC Personal Data Sheet (CS Form 212) online, with a live preview of the official form.",
+    "type": "project",
+    "license": "MIT",
+    "require": {
+        "php": ">=8.0",
+        "ext-openssl": "*",
+        "ext-pdo": "*",
+        "ext-mbstring": "*",
+        "ext-zip": "*"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^11.5",
+        "phpstan/phpstan": "^2.1"
+    },
+    "scripts": {
+        "test": "phpunit",
+        "analyse": "phpstan analyse --memory-limit=1G",
+        "lint": "php tools/lint.php"
+    },
+    "config": {
+        "sort-packages": true,
+        "platform-check": false
+    }
+}
