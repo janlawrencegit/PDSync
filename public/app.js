@@ -11,7 +11,13 @@ const openId = new URLSearchParams(location.hash.slice(1)).get('open');
 let auth = {};
 let step = 0;
 
-const isIso = (v) => /^\d{4}-\d{2}-\d{2}$/.test(v || '');
+// A stored yyyy-mm-dd that is a real calendar date (not 2020-25-12 from a month-first 12/25/2020, nor 30 February).
+const isIso = (v) => {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(v || '');
+  if (!m) return false;
+  const d = new Date(Date.UTC(+m[1], +m[2] - 1, +m[3]));
+  return d.getUTCMonth() === +m[2] - 1 && d.getUTCDate() === +m[3];
+};
 const isNA = (v) => /^n\/?a$/i.test(String(v || '').trim());
 const filled = (v) => String(v ?? '').trim() !== '';
 // Converts d/m/yyyy (also with - or .) to stored yyyy-mm-dd; other text like N/A or PRESENT is kept as typed.
@@ -420,6 +426,15 @@ function workConflict(rows, row, key) {
   return null;
 }
 
+// Why a typed date is not valid. A month-first date (12/25/2020) is stored as 2020-25-12, so it gets the day-first fix.
+function badDate(v) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(v);
+  if (!m) return 'Use dd/mm/yyyy, for example 15/01/1992.';
+  const swapped = `${m[1]}-${m[3]}-${m[2]}`;
+  if (+m[2] > 12 && isIso(swapped)) return `Write the day first (dd/mm/yyyy): ${toDmy(swapped)}.`;
+  return 'This date does not exist. Use dd/mm/yyyy, for example 15/01/1992.';
+}
+
 function check(def, v, ctx = {}) {
   v = String(v ?? '').trim();
   if (!v || isNA(v)) return '';
@@ -428,7 +443,7 @@ function check(def, v, ctx = {}) {
     const across = ctx.table === 'work' && ctx.rows ? workConflict(ctx.rows, ctx.row, def.k) : null;
     if (across) return across.msg;
     if (v === 'PRESENT' && def.present) return '';
-    if (!isIso(v)) return 'Use dd/mm/yyyy, for example 15/01/1992.';
+    if (!isIso(v)) return badDate(v);
     const d = new Date(v), now = new Date();
     if (def.k === 'dob' && !ctx.table) {
       if (d > now) return 'This date is in the future.';
@@ -788,6 +803,18 @@ function restore(data) {
 const sortable = (t) => t.c.some((c) => c.k === 'from' && c.t === 'date');
 const newest = (r) => (r.to === 'PRESENT' ? '9999' : isIso(r.from) ? r.from : '');
 
+// A person who graduated did so in the "To" year, so Year Graduated follows "To" while it is empty or still equals the
+// old "To". It stops once typed differently, or when units are given (the form asks for those only if not graduated).
+function gradFollowsTo(grid, row, prevTo) {
+  const grad = row.year_grad || '';
+  if (grad && grad !== (prevTo || '')) return;
+  if (filled(row.units) && !isNA(row.units)) return;
+  const ctrl = grid.querySelector('[data-k="year_grad"]')?._ctrl;
+  if (!ctrl || ctrl.value === (row.to || '')) return;
+  ctrl.value = row.to || '';
+  ctrl.dispatchEvent(new Event('input', { bubbles: true }));
+}
+
 function renderTable(t) {
   const rows = (state.tables[t.k] ||= []);
   const cap = t.max + (t.more || 0);
@@ -808,7 +835,12 @@ function renderTable(t) {
   let dragFrom = null;
   rows.forEach((row, i) => {
     const grid = el('div', { className: 'fields' });
-    t.c.forEach((c) => grid.append(field(c, row[c.k], (v) => { row[c.k] = v; changed(); }, { table: t.k, row, rows })));
+    t.c.forEach((c) => grid.append(field(c, row[c.k], (v) => {
+      const prev = row[c.k];
+      row[c.k] = v;
+      if (t.k === 'education' && c.k === 'to') gradFollowsTo(grid, row, prev);
+      changed();
+    }, { table: t.k, row, rows })));
     const btn = (d, label, fn, extra = '') => el('button', { type: 'button', className: `btn btn-ghost btn-xs btn-square ${extra}`, title: label, ariaLabel: `${label}, entry ${i + 1}`, onclick: fn }, icon(d, 'size-3.5'));
     const move = (to) => {
       rows.splice(to, 0, rows.splice(i, 1)[0]);
@@ -1374,9 +1406,21 @@ function renderWes() {
         : el('input', { className: 'input w-full', value: e[k] || '', oninput: (ev) => set(k)(ev.target.value) });
       return el('label', { className: `f${t === 'area' ? ' wes-wide' : ''}` }, el('span', { className: 'f-head' }, el('span', {}, label)), ctl);
     };
-    const date = (k, label) => el('label', { className: 'f' }, el('span', { className: 'f-head' }, el('span', {}, label)),
-      el('input', { className: 'input w-full', value: e[k] === 'PRESENT' ? 'Present' : isIso(e[k]) ? toDmy(e[k]) : e[k] || '', placeholder: 'dd/mm/yyyy or Present',
-        oninput: (ev) => { const v = ev.target.value.trim(); set(k)(/^present$/i.test(v) ? 'PRESENT' : toIso(v) || v); } }));
+    // Dates get the same notes as in Section V, refreshed for both when focus leaves either, so From/To agree.
+    const notes = [];
+    const date = (k, label) => {
+      const warn = el('small', { className: 'fwarn', hidden: true, role: 'note' });
+      const recheck = () => {
+        const m = check({ k, t: 'date', present: k === 'to' }, e[k], { table: 'wes', row: e });
+        warn.textContent = m;
+        warn.hidden = !m;
+      };
+      notes.push(recheck);
+      recheck();
+      return el('label', { className: 'f' }, el('span', { className: 'f-head' }, el('span', {}, label)),
+        el('input', { className: 'input w-full', value: e[k] === 'PRESENT' ? 'Present' : toDmy(e[k]), placeholder: 'dd/mm/yyyy or Present',
+          oninput: (ev) => set(k)(toIso(ev.target.value)), onblur: () => notes.forEach((f) => f()) }), warn);
+    };
     const btn = (ic, title, fn, cls = '') => el('button', { type: 'button', className: `btn btn-ghost btn-xs btn-square ${cls}`, title, ariaLabel: title, onclick: fn }, icon(ic, 'size-4'));
     const move = (to) => { list.splice(to, 0, list.splice(i, 1)[0]); changed(); renderWes(); };
     return el('article', { className: 'wes-entry' },
